@@ -37,15 +37,26 @@ function openWhatsApp(choice: Choice) {
 }
 
 function FlavourVisual({ flavour, size = 'md' }: { flavour: Flavour; size?: 'sm' | 'md' | 'lg' }) {
+  const [imageFailed, setImageFailed] = useState(false);
   const sizeClass = size === 'lg' ? 'h-32 w-32' : size === 'sm' ? 'h-12 w-12' : 'h-20 w-20';
   return (
     <div
-      className={`ingredient-orb ${sizeClass} shrink-0 rounded-[1.35rem] border border-white/40 shadow-inner`}
+      className={`ingredient-orb relative overflow-hidden ${sizeClass} shrink-0 rounded-[1.35rem] border border-white/40 shadow-inner`}
       style={{ '--orb-light': flavour.orb.light, '--orb-mid': flavour.orb.mid, '--orb-deep': flavour.orb.deep } as CSSProperties}
       role="img"
       aria-label={`${flavour.name} ingredient visual`}
       data-testid={`visual-flavour-${flavour.id}`}
     >
+      {flavour.photoUrl && !imageFailed && (
+        <img
+          src={flavour.photoUrl}
+          alt={`${flavour.name} ingredient`}
+          className="absolute inset-0 h-full w-full object-cover"
+          loading="lazy"
+          onError={() => setImageFailed(true)}
+        />
+      )}
+      <span className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-white/10" />
       <div className="flex h-full w-full items-end justify-end p-2">
         <span className="rounded-full bg-black/15 px-2 py-1 font-mono text-[9px] text-white/90">{flavour.name.split(' ').map((word) => word[0]).join('')}</span>
       </div>
