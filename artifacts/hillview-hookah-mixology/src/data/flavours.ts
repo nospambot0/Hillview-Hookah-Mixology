@@ -14,6 +14,15 @@ export type Flavour = {
   };
 };
 
+export type Premix = {
+  id: string;
+  name: string;
+  flavourIds: string[];
+  profile: string[];
+  description: string;
+  bestFor: string;
+};
+
 export const TASTE_OPTIONS = [
   'Fruity',
   'Sweet',
@@ -61,6 +70,68 @@ export const flavours: Flavour[] = [
   { id: 'adalya-love-66', name: 'Love 66', brand: 'ADALYA', tags: ['Fruity', 'Citrus', 'Exotic'], strength: 'Medium', character: 'Tropical citrus with an easy crowd-pleasing pull.', orb: { light: 'hsl(55 87% 80%)', mid: 'hsl(44 79% 52%)', deep: 'hsl(25 66% 27%)' } },
 ];
 
+// Familiar lounge-style premixes built only from flavours available in this menu.
+// Brands stay internal so customers can choose by taste, not by bottle label.
+export const premixes: Premix[] = [
+  {
+    id: 'tropical-ice',
+    name: 'Tropical Ice',
+    flavourIds: ['adalya-lady-killer', 'al-fakher-mint', 'afzal-mango'],
+    profile: ['Fruity', 'Exotic', 'Fresh'],
+    description: 'A famous-feeling tropical blend with juicy mango, cool mint, and a smooth lounge finish.',
+    bestFor: 'For an easy crowd-pleaser with a refreshing finish.',
+  },
+  {
+    id: 'blue-exotic',
+    name: 'Blue Exotic',
+    flavourIds: ['al-fauz-blue-berry', 'adalya-lady-killer', 'royal-smoking-kiwi'],
+    profile: ['Fruity', 'Exotic', 'Tart'],
+    description: 'Dark berry, tropical fruit, and bright kiwi come together in a colourful, playful cloud.',
+    bestFor: 'For fruit lovers who like a little tang.',
+  },
+  {
+    id: 'fresh-wave',
+    name: 'Fresh Wave',
+    flavourIds: ['al-fakher-mint', 'starwalker-sub-zero', 'huqqle-puff-american-freezer'],
+    profile: ['Fresh', 'Minty', 'Cooling'],
+    description: 'A crisp, icy trio for a clean, cooling session that stays bright from the first pull.',
+    bestFor: 'For people who want the freshest option on the table.',
+  },
+  {
+    id: 'sweet-tropics',
+    name: 'Sweet Tropics',
+    flavourIds: ['afzal-mango', 'adalya-love-66', 'adalya-lady-killer'],
+    profile: ['Fruity', 'Sweet', 'Exotic'],
+    description: 'Golden mango and tropical fruit make this a soft, sweet blend with no sharp edges.',
+    bestFor: 'For a smooth dessert-like tropical mood.',
+  },
+  {
+    id: 'fruit-punch',
+    name: 'Fruit Punch',
+    flavourIds: ['al-fauz-blue-berry', 'al-fauz-orange', 'al-fauz-grape', 'afzal-mango'],
+    profile: ['Fruity', 'Sweet', 'Citrus'],
+    description: 'A colourful fruit bowl of berry, orange, grape, and mango with a juicy finish.',
+    bestFor: 'For tables that want a little bit of everything fruity.',
+  },
+  {
+    id: 'spiced-exotic',
+    name: 'Spiced Exotic',
+    flavourIds: ['afzal-pan-raas', 'afzal-mango', 'al-fauz-rose'],
+    profile: ['Spiced', 'Exotic', 'Floral'],
+    description: 'A distinctive aromatic blend with paan spice, ripe mango, and a soft rose lift.',
+    bestFor: 'For adventurous guests who want something memorable.',
+  },
+  {
+    id: 'classic-apple',
+    name: 'Classic Apple',
+    flavourIds: ['al-fakher-double-apple', 'al-fakher-mint', 'al-fauz-rose'],
+    profile: ['Classic', 'Fruity', 'Fresh'],
+    description: 'A familiar apple-led mix brightened with mint and a delicate floral finish.',
+    bestFor: 'For a traditional hookah mood with a cleaner finish.',
+  },
+];
+
 export const brands = [...new Set(flavours.map((flavour) => flavour.brand))];
 
 export const getFlavour = (id: string) => flavours.find((flavour) => flavour.id === id);
+export const getPremix = (id: string) => premixes.find((premix) => premix.id === id);

@@ -8,7 +8,7 @@ export function buildWhatsAppMessage(choice: Choice): string {
     .map((id) => {
       const flavour = getFlavour(id);
       if (!flavour) return '';
-      return `${flavour.brand} — ${flavour.name} (${choice.customizations[id] ?? 'Normal'})`;
+      return `${flavour.name} (${choice.customizations[id] ?? 'Normal'})`;
     })
     .filter(Boolean)
     .join('\n');
@@ -18,7 +18,8 @@ export function buildWhatsAppMessage(choice: Choice): string {
     '',
     'I found my customised choice with Hillview Hookah Mixology.',
     '',
-    `Mix:\n${flavourText || 'Surprise me with a thoughtful mix.'}`,
+    `Recommended Mix: ${choice.mixName || 'A thoughtful Hillview mix'}`,
+    `Flavours:\n${flavourText || 'Surprise me with a thoughtful mix.'}`,
     `Taste: ${choice.tastes.length ? choice.tastes.join(', ') : 'Surprise me'}`,
     `Strength: ${choice.strength}`,
     `Avoid: ${choice.avoid.length ? choice.avoid.join(', ') : 'Nothing noted'}`,

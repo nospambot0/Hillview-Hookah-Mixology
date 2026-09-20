@@ -1,41 +1,53 @@
-import { flavours, type Flavour, type Strength } from '../data/flavours';
+import { flavours, premixes, type Flavour, type Premix, type Strength } from '../data/flavours';
 import type { FinderAnswers } from '../types';
 
 export type Recommendation = {
-  flavour: Flavour;
+  mix: Premix;
+  flavours: Flavour[];
   title: string;
   description: string;
   pairing: string;
+  strength: Strength;
 };
 
 const strengthWeight: Record<Strength, number> = { Light: 1, Medium: 2, Strong: 3 };
 
+function getMixFlavours(mix: Premix) {
+  return mix.flavourIds.map((id) => flavours.find((flavour) => flavour.id === id)).filter((flavour): flavour is Flavour => Boolean(flavour));
+}
+
+function getMixStrength(mixFlavours: Flavour[]): Strength {
+  const average = mixFlavours.reduce((total, flavour) => total + strengthWeight[flavour.strength], 0) / Math.max(mixFlavours.length, 1);
+  if (average < 1.67) return 'Light';
+  if (average > 2.33) return 'Strong';
+  return 'Medium';
+}
+
 export function getRecommendations(answers: FinderAnswers): Recommendation[] {
-  const ranked = flavours
-    .map((flavour) => {
-      const tastePoints = flavour.tags.reduce((points, tag) => points + (answers.tastes.includes(tag) ? 5 : 0), 0);
-      const favouritePoints = answers.favouriteId === flavour.id ? 10 : 0;
-      const strengthPoints = Math.max(0, 5 - Math.abs(strengthWeight[flavour.strength] - strengthWeight[answers.strength]) * 2);
+  const ranked = premixes
+    .map((mix) => {
+      const mixFlavours = getMixFlavours(mix);
+      const matchingTastes = mix.profile.reduce((points, tag) => points + (answers.tastes.includes(tag) ? 7 : 0), 0);
+      const favouritePoints = answers.favouriteIds.reduce((points, id) => points + (mix.flavourIds.includes(id) ? 12 : 0), 0);
+      const mixStrength = getMixStrength(mixFlavours);
+      const strengthPoints = Math.max(0, 7 - Math.abs(strengthWeight[mixStrength] - strengthWeight[answers.strength]) * 3);
       const avoidPoints = answers.avoid.reduce((points, avoid) => {
         const target = avoid.replace('Too ', '');
-        return points + (flavour.tags.includes(target) || (target === 'Strong' && flavour.strength === 'Strong') ? -8 : 0);
+        const matchesAvoid = mix.profile.includes(target) || (target === 'Strong' && mixFlavours.some((flavour) => flavour.strength === 'Strong'));
+        return points + (matchesAvoid ? -12 : 0);
       }, 0);
-      const surprisePoints = answers.surprise ? (flavour.id === 'adalya-lady-killer' ? 8 : 0) : 0;
-      return { flavour, score: tastePoints + favouritePoints + strengthPoints + avoidPoints + surprisePoints };
+      const surprisePoints = answers.surprise ? (mix.id === 'tropical-ice' ? 16 : 4) : 0;
+      return { mix, mixFlavours, score: matchingTastes + favouritePoints + strengthPoints + avoidPoints + surprisePoints };
     })
-    .sort((a, b) => b.score - a.score || a.flavour.name.localeCompare(b.flavour.name));
+    .sort((a, b) => b.score - a.score || a.mix.name.localeCompare(b.mix.name));
 
-  const picks = ranked.slice(0, 3);
-  const titles = ['The house call', 'A confident second pour', 'The one to keep curious'];
-  return picks.map(({ flavour }, index) => ({
-    flavour,
-    title: titles[index],
-    description:
-      index === 0
-        ? `${flavour.character} It sits naturally inside the mood you described.`
-        : index === 1
-          ? `A little contrast, still in your lane. ${flavour.character}`
-          : `For the table that likes a small plot twist. ${flavour.character}`,
-    pairing: flavour.tags.slice(0, 3).join(' · '),
+  const titles = ['Closest to your taste', 'A popular second choice', 'Something worth exploring', 'A table favourite', 'The wildcard pour'];
+  return ranked.slice(0, 5).map(({ mix, mixFlavours }, index) => ({
+    mix,
+    flavours: mixFlavours,
+    title: titles[index] ?? 'A Hillview favourite',
+    description: mix.description,
+    pairing: mix.profile.slice(0, 3).join(' · '),
+    strength: getMixStrength(mixFlavours),
   }));
 }

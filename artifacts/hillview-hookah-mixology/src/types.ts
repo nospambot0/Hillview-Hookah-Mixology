@@ -5,16 +5,18 @@ export type CustomLevel = 'Less' | 'Normal' | 'More';
 export type FinderAnswers = {
   tastes: string[];
   strength: Strength;
-  favouriteId: string | null;
+  favouriteIds: string[];
   avoid: string[];
   surprise: boolean;
 };
 
 export type Choice = {
+  mixId: string;
+  mixName: string;
   flavourIds: string[];
   tastes: string[];
   strength: Strength;
-  favouriteId: string | null;
+  favouriteIds: string[];
   avoid: string[];
   customizations: Record<string, CustomLevel>;
   remarks: string;

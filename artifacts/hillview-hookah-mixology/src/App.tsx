@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { ArrowLeft, ArrowRight, Check, ChevronDown, ChevronRight, CircleHelp, Edit3, Flame, GlassWater, Heart, Home as HomeIcon, Leaf, Plus, RotateCcw, Send, Sparkles, Star, Trash2, Wind, X } from 'lucide-react';
 import { Link, Route, Router as WouterRouter, Switch, useLocation } from 'wouter';
-import { AVOID_OPTIONS, brands, flavours, getFlavour, TASTE_OPTIONS, type Flavour, type Strength } from './data/flavours';
+import { AVOID_OPTIONS, flavours, getFlavour, TASTE_OPTIONS, type Flavour, type Strength } from './data/flavours';
 import { getRecommendations, type Recommendation } from './logic/recommendationEngine';
 import { getWhatsAppUrl } from './logic/whatsapp';
 import type { Choice, CustomLevel, FinderAnswers } from './types';
@@ -11,7 +11,7 @@ const STORAGE_KEY = 'hillview-hookah-current-choice';
 const emptyAnswers: FinderAnswers = {
   tastes: [],
   strength: 'Medium',
-  favouriteId: null,
+  favouriteIds: [],
   avoid: [],
   surprise: false,
 };
@@ -19,7 +19,14 @@ const emptyAnswers: FinderAnswers = {
 function readChoice(): Choice | null {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? (JSON.parse(saved) as Choice) : null;
+    if (!saved) return null;
+    const parsed = JSON.parse(saved) as Partial<Choice> & { favouriteId?: string | null };
+    return {
+      ...parsed,
+      mixId: parsed.mixId ?? 'custom-hillview-mix',
+      mixName: parsed.mixName ?? 'Hillview Custom Mix',
+      favouriteIds: parsed.favouriteIds ?? (parsed.favouriteId ? [parsed.favouriteId] : []),
+    } as Choice;
   } catch {
     return null;
   }
@@ -201,15 +208,19 @@ function FinderPage({ onSave, editChoice, launch }: { onSave: (choice: Choice) =
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [customizations, setCustomizations] = useState<Record<string, CustomLevel>>({});
   const [remarks, setRemarks] = useState('');
-  const [activeDetail, setActiveDetail] = useState<Flavour | null>(null);
+  const [selectedMixName, setSelectedMixName] = useState('');
+  const [selectedMixId, setSelectedMixId] = useState('custom-hillview-mix');
+  const [activeDetail, setActiveDetail] = useState<Recommendation | null>(null);
   const [addOpen, setAddOpen] = useState(false);
 
   useEffect(() => {
     if (launch === 'edit' && editChoice) {
-      setAnswers({ tastes: editChoice.tastes, strength: editChoice.strength, favouriteId: editChoice.favouriteId, avoid: editChoice.avoid, surprise: false });
+      setAnswers({ tastes: editChoice.tastes, strength: editChoice.strength, favouriteIds: editChoice.favouriteIds, avoid: editChoice.avoid, surprise: false });
       setSelectedIds(editChoice.flavourIds);
       setCustomizations(editChoice.customizations);
       setRemarks(editChoice.remarks);
+      setSelectedMixName(editChoice.mixName);
+      setSelectedMixId(editChoice.mixId);
       setStage('customize');
     } else if (launch === 'surprise') {
       const surpriseAnswers = { ...emptyAnswers, surprise: true };
@@ -217,22 +228,28 @@ function FinderPage({ onSave, editChoice, launch }: { onSave: (choice: Choice) =
       setStage('results');
       setSelectedIds([]);
       setCustomizations({});
+      setSelectedMixName('');
+      setSelectedMixId('custom-hillview-mix');
     } else {
       setStage('taste');
       setAnswers(emptyAnswers);
       setSelectedIds([]);
       setCustomizations({});
       setRemarks('');
+      setSelectedMixName('');
+      setSelectedMixId('custom-hillview-mix');
     }
   }, [launch, editChoice]);
 
   const recommendations = useMemo(() => getRecommendations(answers), [answers]);
   const selectedFlavours = selectedIds.map(getFlavour).filter((flavour): flavour is Flavour => Boolean(flavour));
   const finalChoice: Choice = {
+    mixId: selectedMixId,
+    mixName: selectedMixName || 'Hillview Custom Mix',
     flavourIds: selectedIds,
     tastes: answers.tastes,
     strength: answers.strength,
-    favouriteId: answers.favouriteId,
+    favouriteIds: answers.favouriteIds,
     avoid: answers.avoid,
     customizations,
     remarks,
@@ -241,10 +258,11 @@ function FinderPage({ onSave, editChoice, launch }: { onSave: (choice: Choice) =
 
   const updateCustomization = (id: string, value: CustomLevel) => setCustomizations((current) => ({ ...current, [id]: value }));
   const chooseRecommendation = (recommendation: Recommendation) => {
-    const second = recommendations.find((item) => item.flavour.id !== recommendation.flavour.id)?.flavour;
-    const ids = second ? [recommendation.flavour.id, second.id] : [recommendation.flavour.id];
+    const ids = recommendation.mix.flavourIds;
     setSelectedIds(ids);
     setCustomizations(Object.fromEntries(ids.map((id) => [id, 'Normal'])));
+    setSelectedMixName(recommendation.mix.name);
+    setSelectedMixId(recommendation.mix.id);
     setActiveDetail(null);
     setStage('customize');
   };
@@ -309,24 +327,19 @@ function FinderPage({ onSave, editChoice, launch }: { onSave: (choice: Choice) =
             <StepHeader step={3} total={4} onBack={goBack} />
             <SectionEyebrow>THE FUN DETAIL</SectionEyebrow>
             <h1 className="hv-display max-w-2xl text-4xl leading-tight md:text-6xl">Any flavour you already know you like?</h1>
-            <p className="mt-4 max-w-lg text-sm leading-6 text-muted-foreground">Optional, but useful. Choose one familiar note and we’ll build around it.</p>
+            <p className="mt-4 max-w-lg text-sm leading-6 text-muted-foreground">Optional, but useful. Pick any flavours you recognize and we’ll use them as hints. Brands stay out of the way.</p>
             <div className="mt-8 space-y-7">
-              {brands.map((brand) => (
-                <div key={brand}>
-                  <p className="hv-mono mb-3 text-[10px] text-muted-foreground">{brand}</p>
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-                    {flavours.filter((flavour) => flavour.brand === brand).map((flavour) => {
-                      const selected = answers.favouriteId === flavour.id;
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                    {flavours.map((flavour) => {
+                      const selected = answers.favouriteIds.includes(flavour.id);
                       return (
-                        <button key={flavour.id} className={`hv-press flex items-center gap-3 rounded-2xl border p-3 text-left transition-colors ${selected ? 'border-secondary bg-secondary/18' : 'border-border bg-card/50 hover:border-secondary/60'}`} onClick={() => setAnswers((current) => ({ ...current, favouriteId: selected ? null : flavour.id }))} aria-pressed={selected} data-testid={`button-favourite-${flavour.id}`}>
+                        <button key={flavour.id} className={`hv-press flex items-center gap-3 rounded-2xl border p-3 text-left transition-colors ${selected ? 'border-secondary bg-secondary/18' : 'border-border bg-card/50 hover:border-secondary/60'}`} onClick={() => setAnswers((current) => ({ ...current, favouriteIds: selected ? current.favouriteIds.filter((id) => id !== flavour.id) : [...current.favouriteIds, flavour.id] }))} aria-pressed={selected} data-testid={`button-favourite-${flavour.id}`}>
                           <FlavourVisual flavour={flavour} size="sm" />
                           <span className="min-w-0"><span className="block truncate text-sm font-bold">{flavour.name}</span><span className="mt-1 block text-[10px] text-muted-foreground">{flavour.tags.slice(0, 2).join(' · ')}</span></span>
                         </button>
                       );
                     })}
-                  </div>
-                </div>
-              ))}
+              </div>
             </div>
             <div className="mt-10 rounded-3xl border border-border bg-card/60 p-5">
               <div className="flex items-start justify-between gap-4">
@@ -357,24 +370,26 @@ function FinderPage({ onSave, editChoice, launch }: { onSave: (choice: Choice) =
             </div>
             <div className="mt-8 grid gap-4">
               {recommendations.map((recommendation, index) => (
-                <article className={`hv-surface hv-press hv-delay-${index + 1} hv-rise rounded-3xl p-5 md:p-7`} key={recommendation.flavour.id} data-testid={`card-recommendation-${recommendation.flavour.id}`}>
+                <article className={`hv-surface hv-press hv-delay-${index + 1} hv-rise rounded-3xl p-5 md:p-7`} key={recommendation.mix.id} data-testid={`card-recommendation-${recommendation.mix.id}`}>
                   <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
-                    <FlavourVisual flavour={recommendation.flavour} size="lg" />
+                    <div className="flex shrink-0 -space-x-7 sm:block sm:space-x-0">
+                      {recommendation.flavours.slice(0, 3).map((flavour, flavourIndex) => <div className={flavourIndex ? 'hidden sm:block sm:mt-2' : ''} key={flavour.id}><FlavourVisual flavour={flavour} size="lg" /></div>)}
+                    </div>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-3"><div><p className="hv-mono text-[10px] text-accent">{recommendation.title}</p><h2 className="hv-display mt-1 text-3xl">{recommendation.flavour.name}</h2></div><span className="rounded-full bg-muted px-3 py-1 font-mono text-[9px] text-muted-foreground">{recommendation.flavour.strength}</span></div>
-                      <p className="mt-2 text-xs text-muted-foreground">{recommendation.flavour.brand} · {recommendation.pairing}</p>
+                      <div className="flex items-start justify-between gap-3"><div><p className="hv-mono text-[10px] text-accent">{recommendation.title}</p><h2 className="hv-display mt-1 text-3xl">{recommendation.mix.name}</h2></div><span className="rounded-full bg-muted px-3 py-1 font-mono text-[9px] text-muted-foreground">{recommendation.strength}</span></div>
+                      <p className="mt-2 text-xs text-muted-foreground">{recommendation.pairing}</p>
                       <p className="mt-4 max-w-xl text-sm leading-6">{recommendation.description}</p>
-                      <div className="mt-5 flex flex-wrap gap-2">{recommendation.flavour.tags.map((tag) => <span className="rounded-full border border-border px-3 py-1 text-[10px] text-muted-foreground" key={tag}>{tag}</span>)}</div>
+                      <div className="mt-5 flex flex-wrap gap-2">{recommendation.flavours.map((flavour) => <span className="rounded-full border border-border px-3 py-1 text-[10px] text-muted-foreground" key={flavour.id}>{flavour.name}</span>)}</div>
                     </div>
                   </div>
                   <div className="mt-6 flex flex-col gap-2 border-t border-border/70 pt-4 sm:flex-row sm:justify-end">
-                    <button className="flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-xs font-bold text-muted-foreground hover:bg-muted hover:text-foreground" onClick={() => setActiveDetail(recommendation.flavour)} data-testid={`button-details-${recommendation.flavour.id}`}>Open details <ChevronDown size={15} /></button>
-                    <button className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-xs font-bold text-primary-foreground" onClick={() => chooseRecommendation(recommendation)} data-testid={`button-choose-${recommendation.flavour.id}`}>Choose this direction <ArrowRight size={15} /></button>
+                    <button className="flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-xs font-bold text-muted-foreground hover:bg-muted hover:text-foreground" onClick={() => setActiveDetail(recommendation)} data-testid={`button-details-${recommendation.mix.id}`}>See the blend <ChevronDown size={15} /></button>
+                    <button className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-xs font-bold text-primary-foreground" onClick={() => chooseRecommendation(recommendation)} data-testid={`button-choose-${recommendation.mix.id}`}>Choose this mix <ArrowRight size={15} /></button>
                   </div>
                 </article>
               ))}
             </div>
-            {activeDetail && <DetailPanel flavour={activeDetail} onClose={() => setActiveDetail(null)} />}
+            {activeDetail && <MixDetailPanel recommendation={activeDetail} onClose={() => setActiveDetail(null)} />}
           </div>
         )}
 
@@ -387,14 +402,14 @@ function FinderPage({ onSave, editChoice, launch }: { onSave: (choice: Choice) =
             <div className="mt-9 space-y-4">
               {selectedFlavours.map((flavour) => (
                 <div className="hv-surface rounded-3xl p-4 md:p-5" key={flavour.id} data-testid={`card-customize-${flavour.id}`}>
-                  <div className="flex items-center gap-4"><FlavourVisual flavour={flavour} size="md" /><div className="min-w-0 flex-1"><p className="hv-mono text-[10px] text-accent">{flavour.brand}</p><h2 className="hv-display mt-1 text-2xl">{flavour.name}</h2><p className="mt-1 truncate text-xs text-muted-foreground">{flavour.character}</p><p className="mt-2 text-[10px] font-semibold text-secondary-foreground">{flavour.strength} body · {flavour.tags.join(' · ')}</p></div><button className="flex h-10 w-10 items-center justify-center rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive" onClick={() => setSelectedIds((ids) => ids.filter((id) => id !== flavour.id))} aria-label={`Remove ${flavour.name}`} data-testid={`button-remove-${flavour.id}`}><Trash2 size={16} /></button></div>
+                   <div className="flex items-center gap-4"><FlavourVisual flavour={flavour} size="md" /><div className="min-w-0 flex-1"><h2 className="hv-display mt-1 text-2xl">{flavour.name}</h2><p className="mt-1 truncate text-xs text-muted-foreground">{flavour.character}</p><p className="mt-2 text-[10px] font-semibold text-secondary-foreground">{flavour.strength} body · {flavour.tags.join(' · ')}</p></div><button className="flex h-10 w-10 items-center justify-center rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive" onClick={() => setSelectedIds((ids) => ids.filter((id) => id !== flavour.id))} aria-label={`Remove ${flavour.name}`} data-testid={`button-remove-${flavour.id}`}><Trash2 size={16} /></button></div>
                   <div className="mt-4 flex items-center justify-between gap-3 border-t border-border/70 pt-4"><div className="flex flex-wrap gap-2">{flavour.tags.map((tag) => <span className="rounded-full bg-muted px-2.5 py-1 text-[10px] text-muted-foreground" key={tag}>{tag}</span>)}</div><div className="flex shrink-0 overflow-hidden rounded-xl border border-border bg-muted/50">{(['Less', 'Normal', 'More'] as CustomLevel[]).map((level) => <button key={level} className={`min-h-10 px-2.5 text-[10px] font-bold transition-colors ${customizations[flavour.id] === level ? 'bg-secondary text-secondary-foreground' : 'text-muted-foreground hover:text-foreground'}`} onClick={() => updateCustomization(flavour.id, level)} aria-pressed={customizations[flavour.id] === level} data-testid={`button-custom-${level.toLowerCase()}-${flavour.id}`}>{level}</button>)}</div></div>
                 </div>
               ))}
             </div>
             <div className="relative mt-4">
               <button className="flex min-h-14 w-full items-center justify-between rounded-2xl border border-dashed border-secondary/70 px-5 text-sm font-bold text-secondary-foreground hover:bg-secondary/10" onClick={() => setAddOpen((open) => !open)} data-testid="button-add-flavour"><span className="flex items-center gap-2"><Plus size={18} /> Add a flavour</span><ChevronDown size={17} className={addOpen ? 'rotate-180 transition-transform' : 'transition-transform'} /></button>
-              {addOpen && <div className="hv-surface absolute left-0 right-0 top-16 z-20 max-h-80 overflow-y-auto rounded-2xl p-3 shadow-2xl"><div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{flavours.filter((flavour) => !selectedIds.includes(flavour.id)).map((flavour) => <button className="flex items-center gap-2 rounded-xl p-2 text-left hover:bg-muted" key={flavour.id} onClick={() => { setSelectedIds((ids) => [...ids, flavour.id]); updateCustomization(flavour.id, 'Normal'); setAddOpen(false); }} data-testid={`button-add-${flavour.id}`}><FlavourVisual flavour={flavour} size="sm" /><span className="min-w-0"><span className="block truncate text-xs font-bold">{flavour.name}</span><span className="block truncate text-[9px] text-muted-foreground">{flavour.brand}</span></span></button>)}</div></div>}
+               {addOpen && <div className="hv-surface absolute left-0 right-0 top-16 z-20 max-h-80 overflow-y-auto rounded-2xl p-3 shadow-2xl"><div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{flavours.filter((flavour) => !selectedIds.includes(flavour.id)).map((flavour) => <button className="flex items-center gap-2 rounded-xl p-2 text-left hover:bg-muted" key={flavour.id} onClick={() => { setSelectedIds((ids) => [...ids, flavour.id]); updateCustomization(flavour.id, 'Normal'); setAddOpen(false); }} data-testid={`button-add-${flavour.id}`}><FlavourVisual flavour={flavour} size="sm" /><span className="min-w-0"><span className="block truncate text-xs font-bold">{flavour.name}</span><span className="block truncate text-[9px] text-muted-foreground">{flavour.tags.slice(0, 2).join(' · ')}</span></span></button>)}</div></div>}
             </div>
             <button className="hv-press mt-8 flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-primary px-6 font-bold text-primary-foreground sm:w-auto" onClick={() => setStage('final')} disabled={selectedIds.length === 0} data-testid="button-review-choice">Review my choice <ArrowRight size={17} /></button>
           </div>
@@ -408,7 +423,7 @@ function FinderPage({ onSave, editChoice, launch }: { onSave: (choice: Choice) =
             <div className="mt-8 grid gap-5 md:grid-cols-[1fr_.78fr]">
               <div className="hv-surface rounded-3xl p-5 md:p-7">
                 <div className="flex items-center justify-between border-b border-border/70 pb-4"><span className="hv-mono text-[10px] text-accent">CUSTOMISED MIX</span><span className="text-xs text-muted-foreground">{answers.strength} session</span></div>
-                <div className="mt-5 space-y-3">{selectedFlavours.length ? selectedFlavours.map((flavour) => <div className="flex items-center gap-3" key={flavour.id}><FlavourVisual flavour={flavour} size="sm" /><div className="min-w-0 flex-1"><p className="text-sm font-bold">{flavour.name}</p><p className="text-[10px] text-muted-foreground">{flavour.brand} · {customizations[flavour.id] ?? 'Normal'}</p></div><Check size={16} className="text-secondary" /></div>) : <p className="text-sm text-muted-foreground">Your expert will make a thoughtful surprise.</p>}</div>
+                 <div className="mt-5 space-y-3">{selectedFlavours.length ? selectedFlavours.map((flavour) => <div className="flex items-center gap-3" key={flavour.id}><FlavourVisual flavour={flavour} size="sm" /><div className="min-w-0 flex-1"><p className="text-sm font-bold">{flavour.name}</p><p className="text-[10px] text-muted-foreground">{customizations[flavour.id] ?? 'Normal'}</p></div><Check size={16} className="text-secondary" /></div>) : <p className="text-sm text-muted-foreground">Your expert will make a thoughtful surprise.</p>}</div>
                 <div className="mt-6 flex flex-wrap gap-2 border-t border-border/70 pt-5">{(answers.tastes.length ? answers.tastes : ['Surprise me']).map((taste) => <span className="rounded-full bg-secondary/15 px-3 py-1.5 text-[10px] font-semibold text-secondary-foreground" key={taste}>{taste}</span>)}</div>
               </div>
               <div className="rounded-3xl bg-primary p-5 text-primary-foreground md:p-7"><p className="hv-mono text-[10px] text-secondary">A NOTE FOR THE EXPERT</p><label className="mt-5 block text-sm font-semibold" htmlFor="remarks">Anything else?</label><textarea id="remarks" value={remarks} onChange={(event) => setRemarks(event.target.value)} className="mt-3 min-h-36 w-full resize-none rounded-2xl border border-primary-foreground/15 bg-primary-foreground/10 p-4 text-sm leading-6 text-primary-foreground placeholder:text-primary-foreground/40 focus:border-secondary focus:outline-none" placeholder="Tell us about the mood, the table, or anything to leave out." data-testid="textarea-remarks" /><p className="mt-4 text-xs leading-5 text-primary-foreground/55">This note travels with your mix to Hillview Hookah Expert on WhatsApp.</p></div>
@@ -422,11 +437,12 @@ function FinderPage({ onSave, editChoice, launch }: { onSave: (choice: Choice) =
   );
 }
 
-function DetailPanel({ flavour, onClose }: { flavour: Flavour; onClose: () => void }) {
+function MixDetailPanel({ recommendation, onClose }: { recommendation: Recommendation; onClose: () => void }) {
   return (
-    <div className="fixed inset-x-4 bottom-24 z-30 mx-auto max-w-lg rounded-3xl bg-primary p-5 text-primary-foreground shadow-2xl shadow-primary/30 md:bottom-8" role="dialog" aria-label={`${flavour.name} details`}>
-      <div className="flex items-start gap-4"><FlavourVisual flavour={flavour} size="md" /><div className="min-w-0 flex-1"><p className="hv-mono text-[10px] text-secondary">{flavour.brand}</p><h2 className="hv-display mt-1 text-3xl">{flavour.name}</h2><p className="mt-2 text-sm leading-6 text-primary-foreground/70">{flavour.character}</p></div><button className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-foreground/10" onClick={onClose} aria-label="Close flavour details" data-testid="button-close-details"><X size={17} /></button></div>
-      <div className="mt-5 flex flex-wrap gap-2">{flavour.tags.map((tag) => <span className="rounded-full border border-primary-foreground/20 px-3 py-1 text-[10px]" key={tag}>{tag}</span>)}<span className="rounded-full border border-secondary/50 px-3 py-1 text-[10px] text-secondary">{flavour.strength} body</span></div>
+    <div className="fixed inset-x-4 bottom-24 z-30 mx-auto max-w-lg rounded-3xl bg-primary p-5 text-primary-foreground shadow-2xl shadow-primary/30 md:bottom-8" role="dialog" aria-label={`${recommendation.mix.name} details`}>
+      <div className="flex items-start gap-4"><FlavourVisual flavour={recommendation.flavours[0]} size="md" /><div className="min-w-0 flex-1"><p className="hv-mono text-[10px] text-secondary">PREMIX DETAILS</p><h2 className="hv-display mt-1 text-3xl">{recommendation.mix.name}</h2><p className="mt-2 text-sm leading-6 text-primary-foreground/70">{recommendation.mix.description}</p></div><button className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-foreground/10" onClick={onClose} aria-label="Close mix details" data-testid="button-close-details"><X size={17} /></button></div>
+      <div className="mt-5 flex flex-wrap gap-2">{recommendation.flavours.map((flavour) => <span className="rounded-full border border-primary-foreground/20 px-3 py-1 text-[10px]" key={flavour.id}>{flavour.name}</span>)}</div>
+      <p className="mt-4 text-xs text-primary-foreground/60">{recommendation.mix.bestFor}</p>
     </div>
   );
 }
@@ -443,7 +459,7 @@ function ChoicePage({ choice, onEdit, onReset }: { choice: Choice | null; onEdit
         ) : (
           <>
             <div className="mt-9 grid gap-4 md:grid-cols-[1.05fr_.95fr]">
-              <div className="rounded-[2rem] bg-primary p-6 text-primary-foreground md:p-8"><div className="flex items-center justify-between"><span className="hv-mono text-[10px] text-secondary">THE MIX</span><Flame size={19} className="text-secondary" /></div><div className="mt-8 space-y-4">{selected.map((flavour) => <div className="flex items-center gap-3" key={flavour.id} data-testid={`text-saved-flavour-${flavour.id}`}><FlavourVisual flavour={flavour} size="sm" /><div><p className="text-sm font-bold">{flavour.name}</p><p className="text-[10px] text-primary-foreground/55">{flavour.brand} · {choice.customizations[flavour.id] ?? 'Normal'}</p></div></div>)}</div><div className="mt-8 border-t border-primary-foreground/15 pt-5"><p className="hv-mono text-[9px] text-primary-foreground/50">MOOD</p><p className="mt-2 text-sm">{choice.tastes.length ? choice.tastes.join(' · ') : 'A Hillview surprise'}</p></div></div>
+              <div className="rounded-[2rem] bg-primary p-6 text-primary-foreground md:p-8"><div className="flex items-center justify-between"><span className="hv-mono text-[10px] text-secondary">THE MIX</span><Flame size={19} className="text-secondary" /></div><h2 className="hv-display mt-6 text-3xl">{choice.mixName || 'Hillview Custom Mix'}</h2><div className="mt-6 space-y-4">{selected.map((flavour) => <div className="flex items-center gap-3" key={flavour.id} data-testid={`text-saved-flavour-${flavour.id}`}><FlavourVisual flavour={flavour} size="sm" /><div><p className="text-sm font-bold">{flavour.name}</p><p className="text-[10px] text-primary-foreground/55">{choice.customizations[flavour.id] ?? 'Normal'}</p></div></div>)}</div><div className="mt-8 border-t border-primary-foreground/15 pt-5"><p className="hv-mono text-[9px] text-primary-foreground/50">MOOD</p><p className="mt-2 text-sm">{choice.tastes.length ? choice.tastes.join(' · ') : 'A Hillview surprise'}</p></div></div>
               <div className="hv-surface rounded-[2rem] p-6 md:p-8"><div className="flex items-center justify-between"><span className="hv-mono text-[10px] text-accent">TABLE NOTES</span><span className="rounded-full bg-muted px-3 py-1 text-[10px] font-semibold">{choice.strength}</span></div><p className="mt-8 text-sm leading-7">{choice.remarks || 'No extra notes — the blend can speak for itself.'}</p><div className="mt-8 border-t border-border/70 pt-5"><p className="text-xs font-bold">Avoiding</p><p className="mt-2 text-xs text-muted-foreground">{choice.avoid.length ? choice.avoid.join(' · ') : 'Nothing noted'}</p></div></div>
             </div>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row"><button className="flex min-h-13 flex-1 items-center justify-center gap-2 rounded-2xl border border-border bg-card px-5 text-sm font-bold hover:bg-muted" onClick={onEdit} data-testid="button-edit-choice"><Edit3 size={16} /> EDIT</button><button className="flex min-h-13 flex-[1.5] items-center justify-center gap-2 rounded-2xl bg-secondary px-5 text-sm font-bold text-secondary-foreground shadow-lg shadow-secondary/15" onClick={() => openWhatsApp(choice)} data-testid="button-order-whatsapp"><Send size={16} /> ORDER ON WHATSAPP</button><button className="flex min-h-13 items-center justify-center gap-2 rounded-2xl border border-border px-5 text-sm font-bold text-muted-foreground hover:border-destructive/40 hover:text-destructive" onClick={onReset} data-testid="button-start-over"><RotateCcw size={16} /> START OVER</button></div>
