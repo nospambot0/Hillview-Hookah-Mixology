@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
-import { ArrowLeft, ArrowRight, Check, ChevronDown, ChevronRight, CircleHelp, Edit3, Flame, GlassWater, Heart, Home as HomeIcon, Leaf, Plus, RotateCcw, Send, Sparkles, Star, Trash2, Wind, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Calculator, Check, ChevronDown, ChevronRight, CircleHelp, ClipboardList, Edit3, Flame, GlassWater, Heart, Home as HomeIcon, Leaf, Plus, RotateCcw, Send, Sparkles, Star, Trash2, Wind, X } from 'lucide-react';
 import { Link, Route, Router as WouterRouter, Switch, useLocation } from 'wouter';
 import { AVOID_OPTIONS, flavours, getFlavour, TASTE_OPTIONS, type Flavour, type Strength } from './data/flavours';
 import { getRecommendations, type Recommendation } from './logic/recommendationEngine';
+import { getBatchRecipe } from './logic/recipe';
 import { getWhatsAppUrl } from './logic/whatsapp';
 import type { Choice, CustomLevel, FinderAnswers } from './types';
 
@@ -148,7 +149,7 @@ function HomePage({ onFind, onSurprise }: { onFind: () => void; onSurprise: () =
         <div className="relative mt-14 flex items-end justify-between border-t border-primary-foreground/15 pt-5 md:absolute md:bottom-8 md:right-12 md:mt-0 md:block md:border-0 md:pt-0">
           <div className="hidden text-right md:block">
             <p className="hv-mono text-[9px] text-primary-foreground/40">THE HILLVIEW NOTE</p>
-            <p className="mt-2 max-w-[150px] text-sm leading-5 text-primary-foreground/70">No percentages. No wrong answers.</p>
+             <p className="mt-2 max-w-[150px] text-sm leading-5 text-primary-foreground/70">No guesswork. No wrong answers.</p>
           </div>
           <div className="flex items-center gap-2 text-xs text-primary-foreground/45 md:mt-16">
             <span className="h-2 w-2 rounded-full bg-secondary" /> Guided in under a minute
@@ -364,7 +365,7 @@ function FinderPage({ onSave, editChoice, launch }: { onSave: (choice: Choice) =
                 })}
               </div>
             </div>
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <button className="hv-press flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-primary px-6 font-bold text-primary-foreground" onClick={() => setStage('results')} data-testid="button-see-recommendations">Show my recommendations <ArrowRight size={17} /></button>
               <button className="hv-press flex min-h-14 items-center justify-center gap-2 rounded-2xl border border-border px-6 text-sm font-semibold hover:bg-muted" onClick={() => { setAnswers((current) => ({ ...current, surprise: true })); setStage('results'); }} data-testid="button-favourite-surprise">Surprise me instead <Sparkles size={16} /></button>
             </div>
@@ -439,6 +440,7 @@ function FinderPage({ onSave, editChoice, launch }: { onSave: (choice: Choice) =
               </div>
               <div className="rounded-3xl bg-primary p-5 text-primary-foreground md:p-7"><p className="hv-mono text-[10px] text-secondary">A NOTE FOR THE EXPERT</p><label className="mt-5 block text-sm font-semibold" htmlFor="remarks">Anything else?</label><textarea id="remarks" value={remarks} onChange={(event) => setRemarks(event.target.value)} className="mt-3 min-h-36 w-full resize-none rounded-2xl border border-primary-foreground/15 bg-primary-foreground/10 p-4 text-sm leading-6 text-primary-foreground placeholder:text-primary-foreground/40 focus:border-secondary focus:outline-none" placeholder="Tell us about the mood, the table, or anything to leave out." data-testid="textarea-remarks" /><p className="mt-4 text-xs leading-5 text-primary-foreground/55">This note travels with your mix to Hillview Hookah Expert on WhatsApp.</p></div>
             </div>
+             <RecipeCard choice={finalChoice} />
             <button className="hv-press mt-6 flex min-h-16 w-full items-center justify-center gap-3 rounded-2xl bg-secondary px-6 font-bold text-secondary-foreground shadow-lg shadow-secondary/20" onClick={() => { onSave(finalChoice); openWhatsApp(finalChoice); }} data-testid="button-order-customised-choice">ORDER CUSTOMISED CHOICE <Send size={18} /></button>
             <p className="mt-3 text-center text-[10px] text-muted-foreground">We’ll open WhatsApp with your exact mix ready to send.</p>
           </div>
@@ -458,6 +460,56 @@ function MixDetailPanel({ recommendation, onClose }: { recommendation: Recommend
   );
 }
 
+function RecipeCard({ choice }: { choice: Choice }) {
+  const [batchSize, setBatchSize] = useState('100');
+  const parsedBatchSize = Number(batchSize);
+  const safeBatchSize = Number.isFinite(parsedBatchSize) && parsedBatchSize > 0 ? parsedBatchSize : 0;
+  const recipe = getBatchRecipe(choice, safeBatchSize);
+
+  if (!recipe.length) return null;
+
+  return (
+    <section className="mt-6 rounded-[2rem] border border-secondary/35 bg-card/70 p-5 shadow-sm md:p-7" data-testid="card-staff-recipe">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+        <div>
+          <p className="hv-mono text-[10px] text-accent">STAFF RECIPE CARD</p>
+          <h2 className="hv-display mt-2 text-3xl">Preparation recipe</h2>
+          <p className="mt-2 max-w-lg text-xs leading-5 text-muted-foreground">Use these normalized percentages for the selected mix. Less and More adjustments are already included.</p>
+        </div>
+        <ClipboardList className="text-secondary" size={22} />
+      </div>
+      <div className="mt-6 rounded-2xl bg-muted/55 p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <label className="text-xs font-bold" htmlFor="batch-size">Preparation calculator</label>
+          <div className="flex items-center gap-2">
+            <Calculator size={16} className="text-secondary" />
+            <div className="flex items-center overflow-hidden rounded-xl border border-border bg-background">
+              <input id="batch-size" type="number" min="1" step="1" value={batchSize} onChange={(event) => setBatchSize(event.target.value)} className="h-10 w-24 bg-transparent px-3 text-right text-sm font-bold outline-none" aria-label="Batch size in grams" data-testid="input-batch-size" />
+              <span className="pr-3 text-xs text-muted-foreground">g</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="mt-4 divide-y divide-border/70 rounded-2xl border border-border/70 bg-background/70">
+        {recipe.map(({ flavour, percentage, amount, customization }) => (
+          <div className="flex items-center gap-3 px-4 py-3" key={flavour.id} data-testid={`recipe-line-${flavour.id}`}>
+            <FlavourVisual flavour={flavour} size="sm" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-bold">{flavour.name}</p>
+              <p className="mt-1 text-[10px] text-muted-foreground">{customization} amount</p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm font-bold text-secondary-foreground">{percentage}%</p>
+              <p className="mt-1 text-[10px] text-muted-foreground">{amount.toFixed(1)} g</p>
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="mt-4 text-[10px] leading-5 text-muted-foreground">Total: {safeBatchSize || '—'} g · Percentages total 100% · Internal preparation reference</p>
+    </section>
+  );
+}
+
 function ChoicePage({ choice, onEdit, onReset }: { choice: Choice | null; onEdit: () => void; onReset: () => void }) {
   const selected = choice?.flavourIds.map(getFlavour).filter((flavour): flavour is Flavour => Boolean(flavour)) ?? [];
   return (
@@ -473,6 +525,7 @@ function ChoicePage({ choice, onEdit, onReset }: { choice: Choice | null; onEdit
               <div className="rounded-[2rem] bg-primary p-6 text-primary-foreground md:p-8"><div className="flex items-center justify-between"><span className="hv-mono text-[10px] text-secondary">THE MIX</span><Flame size={19} className="text-secondary" /></div><h2 className="hv-display mt-6 text-3xl">{choice.mixName || 'Hillview Custom Mix'}</h2><div className="mt-6 space-y-4">{selected.map((flavour) => <div className="flex items-center gap-3" key={flavour.id} data-testid={`text-saved-flavour-${flavour.id}`}><FlavourVisual flavour={flavour} size="sm" /><div><p className="text-sm font-bold">{flavour.name}</p><p className="text-[10px] text-primary-foreground/55">{choice.customizations[flavour.id] ?? 'Normal'}</p></div></div>)}</div><div className="mt-8 border-t border-primary-foreground/15 pt-5"><p className="hv-mono text-[9px] text-primary-foreground/50">MOOD</p><p className="mt-2 text-sm">{choice.tastes.length ? choice.tastes.join(' · ') : 'A Hillview surprise'}</p></div></div>
               <div className="hv-surface rounded-[2rem] p-6 md:p-8"><div className="flex items-center justify-between"><span className="hv-mono text-[10px] text-accent">TABLE NOTES</span><span className="rounded-full bg-muted px-3 py-1 text-[10px] font-semibold">{choice.strength}</span></div><p className="mt-8 text-sm leading-7">{choice.remarks || 'No extra notes — the blend can speak for itself.'}</p><div className="mt-8 border-t border-border/70 pt-5"><p className="text-xs font-bold">Avoiding</p><p className="mt-2 text-xs text-muted-foreground">{choice.avoid.length ? choice.avoid.join(' · ') : 'Nothing noted'}</p></div></div>
             </div>
+             <RecipeCard choice={choice} />
             <div className="mt-6 flex flex-col gap-3 sm:flex-row"><button className="flex min-h-13 flex-1 items-center justify-center gap-2 rounded-2xl border border-border bg-card px-5 text-sm font-bold hover:bg-muted" onClick={onEdit} data-testid="button-edit-choice"><Edit3 size={16} /> EDIT</button><button className="flex min-h-13 flex-[1.5] items-center justify-center gap-2 rounded-2xl bg-secondary px-5 text-sm font-bold text-secondary-foreground shadow-lg shadow-secondary/15" onClick={() => openWhatsApp(choice)} data-testid="button-order-whatsapp"><Send size={16} /> ORDER ON WHATSAPP</button><button className="flex min-h-13 items-center justify-center gap-2 rounded-2xl border border-border px-5 text-sm font-bold text-muted-foreground hover:border-destructive/40 hover:text-destructive" onClick={onReset} data-testid="button-start-over"><RotateCcw size={16} /> START OVER</button></div>
           </>
         )}

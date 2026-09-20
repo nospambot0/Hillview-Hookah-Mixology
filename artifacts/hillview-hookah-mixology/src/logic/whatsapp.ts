@@ -1,16 +1,11 @@
 import type { Choice } from '../types';
-import { getFlavour } from '../data/flavours';
+import { getRecipeForChoice } from './recipe';
 
 export const WHATSAPP_DESTINATION = '917978443720';
 
 export function buildWhatsAppMessage(choice: Choice): string {
-  const flavourText = choice.flavourIds
-    .map((id) => {
-      const flavour = getFlavour(id);
-      if (!flavour) return '';
-      return `${flavour.name} (${choice.customizations[id] ?? 'Normal'})`;
-    })
-    .filter(Boolean)
+  const flavourText = getRecipeForChoice(choice)
+    .map(({ flavour, percentage, customization }) => `${flavour.name} — ${percentage}% (${customization})`)
     .join('\n');
 
   return [

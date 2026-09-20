@@ -19,9 +19,15 @@ export type Premix = {
   id: string;
   name: string;
   flavourIds: string[];
+  recipe: PremixIngredient[];
   profile: string[];
   description: string;
   bestFor: string;
+};
+
+export type PremixIngredient = {
+  flavourId: string;
+  percentage: number;
 };
 
 export const TASTE_OPTIONS = [
@@ -78,6 +84,11 @@ export const premixes: Premix[] = [
     id: 'tropical-ice',
     name: 'Tropical Ice',
     flavourIds: ['adalya-lady-killer', 'al-fakher-mint', 'afzal-mango'],
+    recipe: [
+      { flavourId: 'adalya-lady-killer', percentage: 45 },
+      { flavourId: 'al-fakher-mint', percentage: 20 },
+      { flavourId: 'afzal-mango', percentage: 35 },
+    ],
     profile: ['Fruity', 'Exotic', 'Fresh'],
     description: 'A famous-feeling tropical blend with juicy mango, cool mint, and a smooth lounge finish.',
     bestFor: 'For an easy crowd-pleaser with a refreshing finish.',
@@ -86,6 +97,11 @@ export const premixes: Premix[] = [
     id: 'blue-exotic',
     name: 'Blue Exotic',
     flavourIds: ['al-fauz-blue-berry', 'adalya-lady-killer', 'royal-smoking-kiwi'],
+    recipe: [
+      { flavourId: 'al-fauz-blue-berry', percentage: 35 },
+      { flavourId: 'adalya-lady-killer', percentage: 40 },
+      { flavourId: 'royal-smoking-kiwi', percentage: 25 },
+    ],
     profile: ['Fruity', 'Exotic', 'Tart'],
     description: 'Dark berry, tropical fruit, and bright kiwi come together in a colourful, playful cloud.',
     bestFor: 'For fruit lovers who like a little tang.',
@@ -94,6 +110,11 @@ export const premixes: Premix[] = [
     id: 'fresh-wave',
     name: 'Fresh Wave',
     flavourIds: ['al-fakher-mint', 'starwalker-sub-zero', 'huqqle-puff-american-freezer'],
+    recipe: [
+      { flavourId: 'al-fakher-mint', percentage: 40 },
+      { flavourId: 'starwalker-sub-zero', percentage: 35 },
+      { flavourId: 'huqqle-puff-american-freezer', percentage: 25 },
+    ],
     profile: ['Fresh', 'Minty', 'Cooling'],
     description: 'A crisp, icy trio for a clean, cooling session that stays bright from the first pull.',
     bestFor: 'For people who want the freshest option on the table.',
@@ -102,6 +123,11 @@ export const premixes: Premix[] = [
     id: 'sweet-tropics',
     name: 'Sweet Tropics',
     flavourIds: ['afzal-mango', 'adalya-love-66', 'adalya-lady-killer'],
+    recipe: [
+      { flavourId: 'afzal-mango', percentage: 40 },
+      { flavourId: 'adalya-love-66', percentage: 35 },
+      { flavourId: 'adalya-lady-killer', percentage: 25 },
+    ],
     profile: ['Fruity', 'Sweet', 'Exotic'],
     description: 'Golden mango and tropical fruit make this a soft, sweet blend with no sharp edges.',
     bestFor: 'For a smooth dessert-like tropical mood.',
@@ -110,6 +136,12 @@ export const premixes: Premix[] = [
     id: 'fruit-punch',
     name: 'Fruit Punch',
     flavourIds: ['al-fauz-blue-berry', 'al-fauz-orange', 'al-fauz-grape', 'afzal-mango'],
+    recipe: [
+      { flavourId: 'al-fauz-blue-berry', percentage: 25 },
+      { flavourId: 'al-fauz-orange', percentage: 25 },
+      { flavourId: 'al-fauz-grape', percentage: 25 },
+      { flavourId: 'afzal-mango', percentage: 25 },
+    ],
     profile: ['Fruity', 'Sweet', 'Citrus'],
     description: 'A colourful fruit bowl of berry, orange, grape, and mango with a juicy finish.',
     bestFor: 'For tables that want a little bit of everything fruity.',
@@ -118,6 +150,11 @@ export const premixes: Premix[] = [
     id: 'spiced-exotic',
     name: 'Spiced Exotic',
     flavourIds: ['afzal-pan-raas', 'afzal-mango', 'al-fauz-rose'],
+    recipe: [
+      { flavourId: 'afzal-pan-raas', percentage: 40 },
+      { flavourId: 'afzal-mango', percentage: 40 },
+      { flavourId: 'al-fauz-rose', percentage: 20 },
+    ],
     profile: ['Spiced', 'Exotic', 'Floral'],
     description: 'A distinctive aromatic blend with paan spice, ripe mango, and a soft rose lift.',
     bestFor: 'For adventurous guests who want something memorable.',
@@ -126,6 +163,11 @@ export const premixes: Premix[] = [
     id: 'classic-apple',
     name: 'Classic Apple',
     flavourIds: ['al-fakher-double-apple', 'al-fakher-mint', 'al-fauz-rose'],
+    recipe: [
+      { flavourId: 'al-fakher-double-apple', percentage: 50 },
+      { flavourId: 'al-fakher-mint', percentage: 30 },
+      { flavourId: 'al-fauz-rose', percentage: 20 },
+    ],
     profile: ['Classic', 'Fruity', 'Fresh'],
     description: 'A familiar apple-led mix brightened with mint and a delicate floral finish.',
     bestFor: 'For a traditional hookah mood with a cleaner finish.',
