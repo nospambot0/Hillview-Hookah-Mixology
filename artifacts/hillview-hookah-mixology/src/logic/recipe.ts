@@ -25,13 +25,13 @@ function normalizePercentages(lines: Array<Omit<RecipeLine, 'percentage'> & { pe
 
 export function getRecipeForChoice(choice: Choice): RecipeLine[] {
   const premix = getPremix(choice.mixId);
-  const selectedFlavours = choice.flavourIds.map(getFlavour).filter((flavour): flavour is Flavour => Boolean(flavour));
+  const selectedFlavours = (choice.flavourIds ?? []).map(getFlavour).filter((flavour): flavour is Flavour => Boolean(flavour));
   if (!selectedFlavours.length) return [];
 
   const hasPremixRecipe = Boolean(premix && selectedFlavours.length === premix.recipe.length && selectedFlavours.every((flavour) => premix.recipe.some((ingredient) => ingredient.flavourId === flavour.id)));
   const baseLines = selectedFlavours.map((flavour) => {
     const basePercentage = hasPremixRecipe ? premix?.recipe.find((ingredient) => ingredient.flavourId === flavour.id)?.percentage ?? 0 : 100 / selectedFlavours.length;
-    const customization = choice.customizations[flavour.id] ?? 'Normal';
+    const customization = choice.customizations?.[flavour.id] ?? 'Normal';
     return {
       flavour,
       percentage: basePercentage * customizationMultiplier[customization],

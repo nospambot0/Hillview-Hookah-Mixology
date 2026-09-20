@@ -26,7 +26,14 @@ function readChoice(): Choice | null {
       ...parsed,
       mixId: parsed.mixId ?? 'custom-hillview-mix',
       mixName: parsed.mixName ?? 'Hillview Custom Mix',
+      flavourIds: parsed.flavourIds ?? [],
+      tastes: parsed.tastes ?? [],
+      strength: parsed.strength ?? 'Medium',
       favouriteIds: parsed.favouriteIds ?? (parsed.favouriteId ? [parsed.favouriteId] : []),
+      avoid: parsed.avoid ?? [],
+      customizations: parsed.customizations ?? {},
+      remarks: parsed.remarks ?? '',
+      chosenAt: parsed.chosenAt ?? new Date().toISOString(),
     } as Choice;
   } catch {
     return null;
