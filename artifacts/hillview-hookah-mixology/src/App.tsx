@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
-import { ArrowLeft, ArrowRight, Calculator, Check, ChevronDown, ChevronRight, CircleHelp, ClipboardList, Edit3, Flame, GlassWater, Heart, Home as HomeIcon, Leaf, PackageOpen, Plus, RotateCcw, Send, Settings2, Sparkles, Star, Trash2, Wind, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Calculator, Check, ChevronDown, ChevronRight, CircleHelp, ClipboardList, Edit3, Flame, GlassWater, Heart, Home as HomeIcon, Leaf, LogOut, PackageOpen, Plus, RotateCcw, Send, Settings2, Sparkles, Star, Trash2, Wind, X } from 'lucide-react';
 import { Link, Route, Router as WouterRouter, Switch, useLocation } from 'wouter';
 import { AVOID_OPTIONS, TASTE_OPTIONS, type Flavour, type Premix, type Strength } from './data/flavours';
 import { CATALOG_STORAGE_KEY, readCatalog } from './logic/catalog';
@@ -563,7 +563,7 @@ function createOrb(seed: string) {
   };
 }
 
-function ManagePage({ catalog, onChange }: { catalog: Catalog; onChange: (next: Catalog) => void }) {
+function ManagePage({ catalog, onChange, onLogout }: { catalog: Catalog; onChange: (next: Catalog) => void; onLogout: () => void }) {
   const [flavourForm, setFlavourForm] = useState({ name: '', brand: '', tags: 'Fruity, Fresh', strength: 'Medium' as Strength, character: '', photoUrl: '' });
   const [premixForm, setPremixForm] = useState({ name: '', profile: 'Fruity, Fresh', description: '', bestFor: '' });
   const [selectedIngredients, setSelectedIngredients] = useState<Record<string, string>>({});
@@ -660,7 +660,7 @@ function ManagePage({ catalog, onChange }: { catalog: Catalog; onChange: (next: 
             <h1 className="hv-display text-5xl md:text-6xl">Manage stock</h1>
             <p className="mt-3 max-w-xl text-sm leading-6 text-muted-foreground">Keep active flavour profiles and premix recipes ready for the customer finder. Changes are saved on this device.</p>
           </div>
-          <div className="flex items-center gap-2 rounded-2xl bg-secondary/15 px-4 py-3 text-xs font-semibold text-secondary-foreground"><PackageOpen size={17} /> {catalog.flavours.length} flavours · {catalog.premixes.length} premixes</div>
+          <div className="flex flex-wrap items-center gap-2"><div className="flex items-center gap-2 rounded-2xl bg-secondary/15 px-4 py-3 text-xs font-semibold text-secondary-foreground"><PackageOpen size={17} /> {catalog.flavours.length} flavours · {catalog.premixes.length} premixes</div><button className="flex min-h-11 items-center gap-2 rounded-2xl border border-border px-4 text-xs font-bold text-muted-foreground hover:bg-muted hover:text-foreground" onClick={onLogout} data-testid="button-manage-logout"><LogOut size={15} /> Lock</button></div>
         </div>
         {notice && <p className="mt-6 rounded-2xl border border-secondary/40 bg-secondary/10 px-4 py-3 text-sm font-semibold text-secondary-foreground" role="status">{notice}</p>}
 
@@ -724,6 +724,68 @@ function ManagePage({ catalog, onChange }: { catalog: Catalog; onChange: (next: 
   );
 }
 
+function ManageGate({ catalog, onChange }: { catalog: Catalog; onChange: (next: Catalog) => void }) {
+  const [status, setStatus] = useState<'checking' | 'locked' | 'unlocked'>('checking');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/manage/session', { credentials: 'include' })
+      .then((response) => response.ok ? response.json() as Promise<{ authenticated?: boolean }> : Promise.reject(new Error('Session check failed')))
+      .then((data) => { if (active) setStatus(data.authenticated ? 'unlocked' : 'locked'); })
+      .catch(() => { if (active) { setStatus('locked'); setError('The staff login service is unavailable. Please try again.'); } });
+    return () => { active = false; };
+  }, []);
+
+  const login = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError('');
+    try {
+      const response = await fetch('/api/manage/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ password }),
+      });
+      if (!response.ok) {
+        setPassword('');
+        setError(response.status === 401 ? 'That password was not accepted.' : 'The staff login service is unavailable.');
+        return;
+      }
+      setPassword('');
+      setStatus('unlocked');
+    } catch {
+      setError('The staff login service is unavailable. Please try again.');
+    }
+  };
+
+  const logout = async () => {
+    await fetch('/api/manage/logout', { method: 'POST', credentials: 'include' }).catch(() => undefined);
+    setStatus('locked');
+  };
+
+  if (status === 'checking') {
+    return <main className="hv-shell hv-page-in flex min-h-[60vh] items-center justify-center"><div className="hv-surface rounded-3xl px-8 py-10 text-center"><Settings2 className="mx-auto text-secondary" size={24} /><p className="mt-4 text-sm font-semibold">Checking staff access…</p></div></main>;
+  }
+
+  if (status === 'unlocked') return <ManagePage catalog={catalog} onChange={onChange} onLogout={logout} />;
+
+  return (
+    <main className="hv-shell hv-page-in flex min-h-[65vh] items-center justify-center pb-28">
+      <form className="hv-surface w-full max-w-md rounded-[2rem] p-6 md:p-8" onSubmit={login} data-testid="form-manage-login">
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-secondary/20 text-secondary-foreground"><Settings2 size={22} /></div>
+        <SectionEyebrow>STAFF ACCESS</SectionEyebrow>
+        <h1 className="hv-display text-4xl">Manage stock</h1>
+        <p className="mt-3 text-sm leading-6 text-muted-foreground">Enter the staff password to manage flavour profiles and premix recipes.</p>
+        <label className="mt-7 block text-xs font-bold" htmlFor="manage-password">Password<input id="manage-password" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} className={manageInputClass} data-testid="input-manage-password" /></label>
+        {error && <p className="mt-3 rounded-xl bg-destructive/10 px-3 py-2 text-xs font-semibold text-destructive" role="alert">{error}</p>}
+        <button className="mt-5 flex min-h-12 w-full items-center justify-center rounded-2xl bg-primary px-5 text-sm font-bold text-primary-foreground" type="submit" data-testid="button-manage-login">Unlock management</button>
+      </form>
+    </main>
+  );
+}
+
 function NotFoundPage() {
   return <main className="hv-shell flex min-h-[60vh] flex-col items-center justify-center text-center"><span className="hv-mono text-[10px] text-accent">404 / WRONG TURN</span><h1 className="hv-display mt-4 text-5xl">That cloud drifted away.</h1><Link href="/" className="mt-7 flex min-h-12 items-center gap-2 rounded-2xl bg-primary px-5 text-sm font-bold text-primary-foreground" data-testid="link-not-found-home">Back home <ArrowRight size={16} /></Link></main>;
 }
@@ -734,7 +796,7 @@ function RouterView({ choice, onSave, onEdit, onReset, launch, setLaunch, catalo
       <Route path="/"><HomePage onFind={() => { setLaunch('fresh'); }} onSurprise={() => { setLaunch('surprise'); }} /></Route>
       <Route path="/find"><FinderPage onSave={onSave} editChoice={choice} launch={launch} catalog={catalog} /></Route>
       <Route path="/choice"><ChoicePage choice={choice} onEdit={onEdit} onReset={onReset} catalog={catalog} /></Route>
-      <Route path="/manage"><ManagePage catalog={catalog} onChange={onCatalogChange} /></Route>
+      <Route path="/manage"><ManageGate catalog={catalog} onChange={onCatalogChange} /></Route>
       <Route><NotFoundPage /></Route>
     </Switch>
   );
