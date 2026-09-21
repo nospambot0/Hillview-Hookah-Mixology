@@ -4,6 +4,7 @@ import { Router, type IRouter } from "express";
 const router: IRouter = Router();
 const SESSION_COOKIE = "hillview_manage_session";
 const SESSION_MAX_AGE = 8 * 60 * 60 * 1000;
+const MANAGE_PASSWORD = "adminhillview";
 
 function matchesPassword(candidate: unknown, expected: string | undefined) {
   if (typeof candidate !== "string" || !expected) return false;
@@ -18,7 +19,7 @@ router.get("/manage/session", (req, res) => {
 });
 
 router.post("/manage/login", (req, res) => {
-  if (!matchesPassword(req.body?.password, process.env.HILLVIEW_MANAGE_PASSWORD)) {
+  if (!matchesPassword(req.body?.password, MANAGE_PASSWORD)) {
     res.status(401).json({ message: "Invalid password" });
     return;
   }

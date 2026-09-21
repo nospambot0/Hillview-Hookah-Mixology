@@ -3,6 +3,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 const SESSION_COOKIE = 'hillview_manage_session';
 const SESSION_VALUE = 'authenticated';
 const SESSION_MAX_AGE = 8 * 60 * 60;
+const MANAGE_PASSWORD = 'adminhillview';
 
 type RequestLike = {
   body?: unknown;
@@ -15,7 +16,7 @@ type ResponseLike = {
   end(body?: string): void;
 };
 
-function getEnv(name: 'HILLVIEW_MANAGE_PASSWORD' | 'SESSION_SECRET'): string {
+function getEnv(name: 'SESSION_SECRET'): string {
   const value = process.env[name];
   if (!value) {
     throw new Error(`${name} must be configured in the Vercel project environment.`);
@@ -95,7 +96,7 @@ function readPassword(body: unknown): unknown {
 
 function matchesPassword(candidate: unknown): boolean {
   if (typeof candidate !== 'string') return false;
-  const expected = Buffer.from(getEnv('HILLVIEW_MANAGE_PASSWORD'));
+  const expected = Buffer.from(MANAGE_PASSWORD);
   const actual = Buffer.from(candidate);
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }

@@ -5,10 +5,11 @@ workspace. The Vercel project should use the default root directory (`.`).
 
 ## Required environment variables
 
-Add these variables in the Vercel project settings for Preview and Production:
+Add this variable in the Vercel project settings for Preview and Production:
 
-- `HILLVIEW_MANAGE_PASSWORD` — password used by the `/manage` staff screen
 - `SESSION_SECRET` — a long, random value used to sign the staff session cookie
+
+The `/manage` staff screen uses the built-in password `adminhillview`.
 
 The public mixology flow does not require a database or any other environment
 variables.
