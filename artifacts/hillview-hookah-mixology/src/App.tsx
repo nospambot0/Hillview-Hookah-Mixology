@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
-import { ArrowLeft, ArrowRight, Calculator, Check, ChevronDown, ChevronRight, CircleHelp, ClipboardList, Edit3, Flame, GlassWater, Heart, Home as HomeIcon, Leaf, Plus, RotateCcw, Send, Sparkles, Star, Trash2, Wind, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Calculator, Check, ChevronDown, ChevronRight, CircleHelp, ClipboardList, Edit3, Flame, GlassWater, Heart, Home as HomeIcon, Leaf, PackageOpen, Plus, RotateCcw, Send, Settings2, Sparkles, Star, Trash2, Wind, X } from 'lucide-react';
 import { Link, Route, Router as WouterRouter, Switch, useLocation } from 'wouter';
-import { AVOID_OPTIONS, flavours, getFlavour, TASTE_OPTIONS, type Flavour, type Strength } from './data/flavours';
+import { AVOID_OPTIONS, TASTE_OPTIONS, type Flavour, type Premix, type Strength } from './data/flavours';
+import { CATALOG_STORAGE_KEY, readCatalog } from './logic/catalog';
 import { getRecommendations, type Recommendation } from './logic/recommendationEngine';
 import { getBatchRecipe } from './logic/recipe';
 import { getWhatsAppUrl } from './logic/whatsapp';
-import type { Choice, CustomLevel, FinderAnswers } from './types';
+import type { Catalog, Choice, CustomLevel, FinderAnswers } from './types';
 
 const STORAGE_KEY = 'hillview-hookah-current-choice';
 
@@ -40,8 +41,8 @@ function readChoice(): Choice | null {
   }
 }
 
-function openWhatsApp(choice: Choice) {
-  window.open(getWhatsAppUrl(choice), '_blank', 'noopener,noreferrer');
+function openWhatsApp(choice: Choice, catalog: Catalog) {
+  window.open(getWhatsAppUrl(choice, catalog.flavours, catalog.premixes), '_blank', 'noopener,noreferrer');
 }
 
 function FlavourVisual({ flavour, size = 'md' }: { flavour: Flavour; size?: 'sm' | 'md' | 'lg' }) {
@@ -117,9 +118,15 @@ function AppShell({ children, choice }: { children: ReactNode; choice: Choice | 
     <div className="hv-app hv-noise">
       <header className="hv-shell flex items-center justify-between py-5 md:py-7">
         <BrandMark />
-        <div className="hidden items-center gap-2 text-right md:flex">
-          <CircleHelp size={16} className="text-secondary" />
-          <span className="text-xs text-muted-foreground">A little guidance for your next cloud</span>
+        <div className="flex items-center gap-3">
+          <Link href="/manage" className="flex min-h-9 items-center gap-2 rounded-xl px-2 text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground" data-testid="link-manage-catalog">
+            <Settings2 size={15} />
+            <span className="hidden sm:inline">Manage</span>
+          </Link>
+          <div className="hidden items-center gap-2 text-right md:flex">
+            <CircleHelp size={16} className="text-secondary" />
+            <span className="text-xs text-muted-foreground">A little guidance for your next cloud</span>
+          </div>
         </div>
       </header>
       {children}
@@ -221,7 +228,7 @@ function StepHeader({ step, total, onBack }: { step: number; total: number; onBa
   );
 }
 
-function FinderPage({ onSave, editChoice, launch }: { onSave: (choice: Choice) => void; editChoice: Choice | null; launch: 'fresh' | 'surprise' | 'edit' }) {
+function FinderPage({ onSave, editChoice, launch, catalog }: { onSave: (choice: Choice) => void; editChoice: Choice | null; launch: 'fresh' | 'surprise' | 'edit'; catalog: Catalog }) {
   const [stage, setStage] = useState<'taste' | 'strength' | 'favourite' | 'results' | 'customize' | 'final'>('taste');
   const [answers, setAnswers] = useState<FinderAnswers>(emptyAnswers);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -260,8 +267,8 @@ function FinderPage({ onSave, editChoice, launch }: { onSave: (choice: Choice) =
     }
   }, [launch, editChoice]);
 
-  const recommendations = useMemo(() => getRecommendations(answers), [answers]);
-  const selectedFlavours = selectedIds.map(getFlavour).filter((flavour): flavour is Flavour => Boolean(flavour));
+  const recommendations = useMemo(() => getRecommendations(answers, catalog.flavours, catalog.premixes), [answers, catalog]);
+  const selectedFlavours = selectedIds.map((id) => catalog.flavours.find((flavour) => flavour.id === id)).filter((flavour): flavour is Flavour => Boolean(flavour));
   const finalChoice: Choice = {
     mixId: selectedMixId,
     mixName: selectedMixName || 'Hillview Custom Mix',
@@ -349,7 +356,7 @@ function FinderPage({ onSave, editChoice, launch }: { onSave: (choice: Choice) =
             <p className="mt-4 max-w-lg text-sm leading-6 text-muted-foreground">Optional, but useful. Pick any flavours you recognize and we’ll use them as hints. Brands stay out of the way.</p>
             <div className="mt-8 space-y-7">
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-                    {flavours.map((flavour) => {
+                    {catalog.flavours.map((flavour) => {
                       const selected = answers.favouriteIds.includes(flavour.id);
                       return (
                         <button key={flavour.id} className={`hv-press flex items-center gap-3 rounded-2xl border p-3 text-left transition-colors ${selected ? 'border-secondary bg-secondary/18' : 'border-border bg-card/50 hover:border-secondary/60'}`} onClick={() => setAnswers((current) => ({ ...current, favouriteIds: selected ? current.favouriteIds.filter((id) => id !== flavour.id) : [...current.favouriteIds, flavour.id] }))} aria-pressed={selected} data-testid={`button-favourite-${flavour.id}`}>
@@ -428,7 +435,7 @@ function FinderPage({ onSave, editChoice, launch }: { onSave: (choice: Choice) =
             </div>
             <div className="relative mt-4">
               <button className="flex min-h-14 w-full items-center justify-between rounded-2xl border border-dashed border-secondary/70 px-5 text-sm font-bold text-secondary-foreground hover:bg-secondary/10" onClick={() => setAddOpen((open) => !open)} data-testid="button-add-flavour"><span className="flex items-center gap-2"><Plus size={18} /> Add a flavour</span><ChevronDown size={17} className={addOpen ? 'rotate-180 transition-transform' : 'transition-transform'} /></button>
-               {addOpen && <div className="hv-surface absolute left-0 right-0 top-16 z-20 max-h-80 overflow-y-auto rounded-2xl p-3 shadow-2xl"><div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{flavours.filter((flavour) => !selectedIds.includes(flavour.id)).map((flavour) => <button className="flex items-center gap-2 rounded-xl p-2 text-left hover:bg-muted" key={flavour.id} onClick={() => { setSelectedIds((ids) => [...ids, flavour.id]); updateCustomization(flavour.id, 'Normal'); setAddOpen(false); }} data-testid={`button-add-${flavour.id}`}><FlavourVisual flavour={flavour} size="sm" /><span className="min-w-0"><span className="block truncate text-xs font-bold">{flavour.name}</span><span className="block truncate text-[9px] text-muted-foreground">{flavour.tags.slice(0, 2).join(' · ')}</span></span></button>)}</div></div>}
+               {addOpen && <div className="hv-surface absolute left-0 right-0 top-16 z-20 max-h-80 overflow-y-auto rounded-2xl p-3 shadow-2xl"><div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{catalog.flavours.filter((flavour) => !selectedIds.includes(flavour.id)).map((flavour) => <button className="flex items-center gap-2 rounded-xl p-2 text-left hover:bg-muted" key={flavour.id} onClick={() => { setSelectedIds((ids) => [...ids, flavour.id]); updateCustomization(flavour.id, 'Normal'); setAddOpen(false); }} data-testid={`button-add-${flavour.id}`}><FlavourVisual flavour={flavour} size="sm" /><span className="min-w-0"><span className="block truncate text-xs font-bold">{flavour.name}</span><span className="block truncate text-[9px] text-muted-foreground">{flavour.tags.slice(0, 2).join(' · ')}</span></span></button>)}</div></div>}
             </div>
             <button className="hv-press mt-8 flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-primary px-6 font-bold text-primary-foreground sm:w-auto" onClick={() => setStage('final')} disabled={selectedIds.length === 0} data-testid="button-review-choice">Review my choice <ArrowRight size={17} /></button>
           </div>
@@ -447,8 +454,8 @@ function FinderPage({ onSave, editChoice, launch }: { onSave: (choice: Choice) =
               </div>
               <div className="rounded-3xl bg-primary p-5 text-primary-foreground md:p-7"><p className="hv-mono text-[10px] text-secondary">A NOTE FOR THE EXPERT</p><label className="mt-5 block text-sm font-semibold" htmlFor="remarks">Anything else?</label><textarea id="remarks" value={remarks} onChange={(event) => setRemarks(event.target.value)} className="mt-3 min-h-36 w-full resize-none rounded-2xl border border-primary-foreground/15 bg-primary-foreground/10 p-4 text-sm leading-6 text-primary-foreground placeholder:text-primary-foreground/40 focus:border-secondary focus:outline-none" placeholder="Tell us about the mood, the table, or anything to leave out." data-testid="textarea-remarks" /><p className="mt-4 text-xs leading-5 text-primary-foreground/55">This note travels with your mix to Hillview Hookah Expert on WhatsApp.</p></div>
             </div>
-             <RecipeCard choice={finalChoice} />
-            <button className="hv-press mt-6 flex min-h-16 w-full items-center justify-center gap-3 rounded-2xl bg-secondary px-6 font-bold text-secondary-foreground shadow-lg shadow-secondary/20" onClick={() => { onSave(finalChoice); openWhatsApp(finalChoice); }} data-testid="button-order-customised-choice">ORDER CUSTOMISED CHOICE <Send size={18} /></button>
+            <RecipeCard choice={finalChoice} catalog={catalog} />
+            <button className="hv-press mt-6 flex min-h-16 w-full items-center justify-center gap-3 rounded-2xl bg-secondary px-6 font-bold text-secondary-foreground shadow-lg shadow-secondary/20" onClick={() => { onSave(finalChoice); openWhatsApp(finalChoice, catalog); }} data-testid="button-order-customised-choice">ORDER CUSTOMISED CHOICE <Send size={18} /></button>
             <p className="mt-3 text-center text-[10px] text-muted-foreground">We’ll open WhatsApp with your exact mix ready to send.</p>
           </div>
         )}
@@ -467,11 +474,11 @@ function MixDetailPanel({ recommendation, onClose }: { recommendation: Recommend
   );
 }
 
-function RecipeCard({ choice }: { choice: Choice }) {
+function RecipeCard({ choice, catalog }: { choice: Choice; catalog: Catalog }) {
   const [batchSize, setBatchSize] = useState('100');
   const parsedBatchSize = Number(batchSize);
   const safeBatchSize = Number.isFinite(parsedBatchSize) && parsedBatchSize > 0 ? parsedBatchSize : 0;
-  const recipe = getBatchRecipe(choice, safeBatchSize);
+  const recipe = getBatchRecipe(choice, safeBatchSize, catalog.flavours, catalog.premixes);
 
   if (!recipe.length) return null;
 
@@ -517,8 +524,8 @@ function RecipeCard({ choice }: { choice: Choice }) {
   );
 }
 
-function ChoicePage({ choice, onEdit, onReset }: { choice: Choice | null; onEdit: () => void; onReset: () => void }) {
-  const selected = choice?.flavourIds.map(getFlavour).filter((flavour): flavour is Flavour => Boolean(flavour)) ?? [];
+function ChoicePage({ choice, onEdit, onReset, catalog }: { choice: Choice | null; onEdit: () => void; onReset: () => void; catalog: Catalog }) {
+  const selected = choice?.flavourIds.map((id) => catalog.flavours.find((flavour) => flavour.id === id)).filter((flavour): flavour is Flavour => Boolean(flavour)) ?? [];
   return (
     <main className="hv-shell hv-page-in">
       <div className="mx-auto max-w-4xl">
@@ -532,10 +539,186 @@ function ChoicePage({ choice, onEdit, onReset }: { choice: Choice | null; onEdit
               <div className="rounded-[2rem] bg-primary p-6 text-primary-foreground md:p-8"><div className="flex items-center justify-between"><span className="hv-mono text-[10px] text-secondary">THE MIX</span><Flame size={19} className="text-secondary" /></div><h2 className="hv-display mt-6 text-3xl">{choice.mixName || 'Hillview Custom Mix'}</h2><div className="mt-6 space-y-4">{selected.map((flavour) => <div className="flex items-center gap-3" key={flavour.id} data-testid={`text-saved-flavour-${flavour.id}`}><FlavourVisual flavour={flavour} size="sm" /><div><p className="text-sm font-bold">{flavour.name}</p><p className="text-[10px] text-primary-foreground/55">{choice.customizations[flavour.id] ?? 'Normal'}</p></div></div>)}</div><div className="mt-8 border-t border-primary-foreground/15 pt-5"><p className="hv-mono text-[9px] text-primary-foreground/50">MOOD</p><p className="mt-2 text-sm">{choice.tastes.length ? choice.tastes.join(' · ') : 'A Hillview surprise'}</p></div></div>
               <div className="hv-surface rounded-[2rem] p-6 md:p-8"><div className="flex items-center justify-between"><span className="hv-mono text-[10px] text-accent">TABLE NOTES</span><span className="rounded-full bg-muted px-3 py-1 text-[10px] font-semibold">{choice.strength}</span></div><p className="mt-8 text-sm leading-7">{choice.remarks || 'No extra notes — the blend can speak for itself.'}</p><div className="mt-8 border-t border-border/70 pt-5"><p className="text-xs font-bold">Avoiding</p><p className="mt-2 text-xs text-muted-foreground">{choice.avoid.length ? choice.avoid.join(' · ') : 'Nothing noted'}</p></div></div>
             </div>
-             <RecipeCard choice={choice} />
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row"><button className="flex min-h-13 flex-1 items-center justify-center gap-2 rounded-2xl border border-border bg-card px-5 text-sm font-bold hover:bg-muted" onClick={onEdit} data-testid="button-edit-choice"><Edit3 size={16} /> EDIT</button><button className="flex min-h-13 flex-[1.5] items-center justify-center gap-2 rounded-2xl bg-secondary px-5 text-sm font-bold text-secondary-foreground shadow-lg shadow-secondary/15" onClick={() => openWhatsApp(choice)} data-testid="button-order-whatsapp"><Send size={16} /> ORDER ON WHATSAPP</button><button className="flex min-h-13 items-center justify-center gap-2 rounded-2xl border border-border px-5 text-sm font-bold text-muted-foreground hover:border-destructive/40 hover:text-destructive" onClick={onReset} data-testid="button-start-over"><RotateCcw size={16} /> START OVER</button></div>
+             <RecipeCard choice={choice} catalog={catalog} />
+             <div className="mt-6 flex flex-col gap-3 sm:flex-row"><button className="flex min-h-13 flex-1 items-center justify-center gap-2 rounded-2xl border border-border bg-card px-5 text-sm font-bold hover:bg-muted" onClick={onEdit} data-testid="button-edit-choice"><Edit3 size={16} /> EDIT</button><button className="flex min-h-13 flex-[1.5] items-center justify-center gap-2 rounded-2xl bg-secondary px-5 text-sm font-bold text-secondary-foreground shadow-lg shadow-secondary/15" onClick={() => openWhatsApp(choice, catalog)} data-testid="button-order-whatsapp"><Send size={16} /> ORDER ON WHATSAPP</button><button className="flex min-h-13 items-center justify-center gap-2 rounded-2xl border border-border px-5 text-sm font-bold text-muted-foreground hover:border-destructive/40 hover:text-destructive" onClick={onReset} data-testid="button-start-over"><RotateCcw size={16} /> START OVER</button></div>
           </>
         )}
+      </div>
+    </main>
+  );
+}
+
+const manageInputClass = 'mt-2 h-11 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none focus:border-secondary';
+
+function slugify(value: string) {
+  return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'custom';
+}
+
+function createOrb(seed: string) {
+  const hue = [...seed].reduce((total, character) => total + character.charCodeAt(0), 0) % 360;
+  return {
+    light: `hsl(${hue} 78% 78%)`,
+    mid: `hsl(${hue} 58% 50%)`,
+    deep: `hsl(${hue} 48% 25%)`,
+  };
+}
+
+function ManagePage({ catalog, onChange }: { catalog: Catalog; onChange: (next: Catalog) => void }) {
+  const [flavourForm, setFlavourForm] = useState({ name: '', brand: '', tags: 'Fruity, Fresh', strength: 'Medium' as Strength, character: '', photoUrl: '' });
+  const [premixForm, setPremixForm] = useState({ name: '', profile: 'Fruity, Fresh', description: '', bestFor: '' });
+  const [selectedIngredients, setSelectedIngredients] = useState<Record<string, string>>({});
+  const [notice, setNotice] = useState('');
+
+  const addFlavour = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const name = flavourForm.name.trim();
+    if (!name || !flavourForm.character.trim()) {
+      setNotice('Add a flavour name and a short flavour description.');
+      return;
+    }
+    const baseId = `custom-${slugify(name)}`;
+    const id = catalog.flavours.some((flavour) => flavour.id === baseId) ? `${baseId}-${catalog.flavours.length + 1}` : baseId;
+    const nextFlavour: Flavour = {
+      id,
+      name,
+      brand: flavourForm.brand.trim() || 'Hillview Stock',
+      tags: flavourForm.tags.split(',').map((tag) => tag.trim()).filter(Boolean),
+      strength: flavourForm.strength,
+      character: flavourForm.character.trim(),
+      photoUrl: flavourForm.photoUrl.trim() || undefined,
+      orb: createOrb(name),
+    };
+    onChange({ ...catalog, flavours: [...catalog.flavours, nextFlavour] });
+    setFlavourForm({ name: '', brand: '', tags: 'Fruity, Fresh', strength: 'Medium', character: '', photoUrl: '' });
+    setNotice(`${name} was added to flavour stock.`);
+  };
+
+  const removeFlavour = (flavour: Flavour) => {
+    const linkedPremixes = catalog.premixes.filter((premix) => premix.flavourIds.includes(flavour.id));
+    if (linkedPremixes.length) {
+      setNotice(`Remove ${linkedPremixes.map((premix) => premix.name).join(', ')} before removing ${flavour.name}.`);
+      return;
+    }
+    if (!window.confirm(`Remove ${flavour.name} from active flavour stock?`)) return;
+    onChange({ ...catalog, flavours: catalog.flavours.filter((item) => item.id !== flavour.id) });
+    setNotice(`${flavour.name} was removed from active stock.`);
+  };
+
+  const toggleIngredient = (flavourId: string) => {
+    setSelectedIngredients((current) => {
+      if (current[flavourId] !== undefined) {
+        const next = { ...current };
+        delete next[flavourId];
+        return next;
+      }
+      return { ...current, [flavourId]: '25' };
+    });
+  };
+
+  const addPremix = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const name = premixForm.name.trim();
+    const entries = Object.entries(selectedIngredients).map(([flavourId, percentage]) => ({ flavourId, percentage: Number(percentage) }));
+    const total = entries.reduce((sum, entry) => sum + entry.percentage, 0);
+    if (!name || !premixForm.description.trim() || !premixForm.bestFor.trim()) {
+      setNotice('Add a premix name, description, and best-for note.');
+      return;
+    }
+    if (entries.length < 2 || entries.some((entry) => !Number.isFinite(entry.percentage) || entry.percentage <= 0) || Math.abs(total - 100) > 0.01) {
+      setNotice('Choose at least two flavours and make their percentages total exactly 100%.');
+      return;
+    }
+    const baseId = `custom-${slugify(name)}`;
+    const id = catalog.premixes.some((premix) => premix.id === baseId) ? `${baseId}-${catalog.premixes.length + 1}` : baseId;
+    const nextPremix: Premix = {
+      id,
+      name,
+      flavourIds: entries.map((entry) => entry.flavourId),
+      recipe: entries,
+      profile: premixForm.profile.split(',').map((tag) => tag.trim()).filter(Boolean),
+      description: premixForm.description.trim(),
+      bestFor: premixForm.bestFor.trim(),
+    };
+    onChange({ ...catalog, premixes: [...catalog.premixes, nextPremix] });
+    setPremixForm({ name: '', profile: 'Fruity, Fresh', description: '', bestFor: '' });
+    setSelectedIngredients({});
+    setNotice(`${name} was added to premixes.`);
+  };
+
+  const removePremix = (premix: Premix) => {
+    if (!window.confirm(`Remove ${premix.name} from active premixes?`)) return;
+    onChange({ ...catalog, premixes: catalog.premixes.filter((item) => item.id !== premix.id) });
+    setNotice(`${premix.name} was removed from active premixes.`);
+  };
+
+  return (
+    <main className="hv-shell hv-page-in pb-28">
+      <div className="mx-auto max-w-6xl">
+        <SectionEyebrow>STAFF CATALOG</SectionEyebrow>
+        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
+          <div>
+            <h1 className="hv-display text-5xl md:text-6xl">Manage stock</h1>
+            <p className="mt-3 max-w-xl text-sm leading-6 text-muted-foreground">Keep active flavour profiles and premix recipes ready for the customer finder. Changes are saved on this device.</p>
+          </div>
+          <div className="flex items-center gap-2 rounded-2xl bg-secondary/15 px-4 py-3 text-xs font-semibold text-secondary-foreground"><PackageOpen size={17} /> {catalog.flavours.length} flavours · {catalog.premixes.length} premixes</div>
+        </div>
+        {notice && <p className="mt-6 rounded-2xl border border-secondary/40 bg-secondary/10 px-4 py-3 text-sm font-semibold text-secondary-foreground" role="status">{notice}</p>}
+
+        <section className="mt-9 grid gap-5 lg:grid-cols-[.8fr_1.2fr]">
+          <form className="hv-surface rounded-[2rem] p-5 md:p-7" onSubmit={addFlavour} data-testid="form-add-flavour">
+            <p className="hv-mono text-[10px] text-accent">FLAVOUR PROFILES</p>
+            <h2 className="hv-display mt-2 text-3xl">Add stock flavour</h2>
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">Brands stay internal here for staff context; customers still see flavour names only.</p>
+            <label className="mt-5 block text-xs font-bold" htmlFor="stock-flavour-name">Flavour name<input id="stock-flavour-name" className={manageInputClass} value={flavourForm.name} onChange={(event) => setFlavourForm({ ...flavourForm, name: event.target.value })} placeholder="e.g. Peach" data-testid="input-stock-flavour-name" /></label>
+            <label className="mt-4 block text-xs font-bold" htmlFor="stock-flavour-brand">Internal brand<input id="stock-flavour-brand" className={manageInputClass} value={flavourForm.brand} onChange={(event) => setFlavourForm({ ...flavourForm, brand: event.target.value })} placeholder="Optional" data-testid="input-stock-flavour-brand" /></label>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <label className="block text-xs font-bold" htmlFor="stock-flavour-strength">Strength<select id="stock-flavour-strength" className={manageInputClass} value={flavourForm.strength} onChange={(event) => setFlavourForm({ ...flavourForm, strength: event.target.value as Strength })} data-testid="select-stock-flavour-strength"><option>Light</option><option>Medium</option><option>Strong</option></select></label>
+              <label className="block text-xs font-bold" htmlFor="stock-flavour-tags">Taste tags<input id="stock-flavour-tags" className={manageInputClass} value={flavourForm.tags} onChange={(event) => setFlavourForm({ ...flavourForm, tags: event.target.value })} placeholder="Fruity, Fresh" data-testid="input-stock-flavour-tags" /></label>
+            </div>
+            <label className="mt-4 block text-xs font-bold" htmlFor="stock-flavour-character">Flavour profile<textarea id="stock-flavour-character" className="mt-2 min-h-24 w-full rounded-xl border border-border bg-background p-3 text-sm outline-none focus:border-secondary" value={flavourForm.character} onChange={(event) => setFlavourForm({ ...flavourForm, character: event.target.value })} placeholder="Bright peach with a soft, juicy finish." data-testid="input-stock-flavour-character" /></label>
+            <label className="mt-4 block text-xs font-bold" htmlFor="stock-flavour-photo">Photo URL <span className="font-normal text-muted-foreground">(optional)</span><input id="stock-flavour-photo" type="url" className={manageInputClass} value={flavourForm.photoUrl} onChange={(event) => setFlavourForm({ ...flavourForm, photoUrl: event.target.value })} placeholder="https://..." data-testid="input-stock-flavour-photo" /></label>
+            <button className="mt-5 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary px-5 text-sm font-bold text-primary-foreground" type="submit" data-testid="button-add-stock-flavour"><Plus size={17} /> Add flavour to stock</button>
+          </form>
+
+          <div className="hv-surface rounded-[2rem] p-5 md:p-7">
+            <div className="flex items-start justify-between gap-4"><div><p className="hv-mono text-[10px] text-accent">ACTIVE STOCK</p><h2 className="hv-display mt-2 text-3xl">Flavour profiles</h2></div><PackageOpen className="text-secondary" size={22} /></div>
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              {catalog.flavours.map((flavour) => (
+                <article className="rounded-2xl border border-border bg-background/70 p-3" key={flavour.id} data-testid={`card-stock-${flavour.id}`}>
+                  <div className="flex items-center gap-3"><FlavourVisual flavour={flavour} size="sm" /><div className="min-w-0 flex-1"><h3 className="truncate text-sm font-bold">{flavour.name}</h3><p className="mt-1 truncate text-[10px] text-muted-foreground">{flavour.brand} · {flavour.strength}</p><p className="mt-1 truncate text-[10px] text-muted-foreground">{flavour.tags.join(' · ')}</p></div><button className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive" onClick={() => removeFlavour(flavour)} aria-label={`Remove ${flavour.name} from stock`} data-testid={`button-remove-stock-${flavour.id}`}><Trash2 size={15} /></button></div>
+                </article>
+              ))}
+              {!catalog.flavours.length && <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">No active flavour profiles. Add stock to build premixes.</p>}
+            </div>
+          </div>
+        </section>
+
+        <section className="mt-5 grid gap-5 lg:grid-cols-[1.2fr_.8fr]">
+          <form className="hv-surface rounded-[2rem] p-5 md:p-7" onSubmit={addPremix} data-testid="form-add-premix">
+            <p className="hv-mono text-[10px] text-accent">PREMIX RECIPES</p>
+            <h2 className="hv-display mt-2 text-3xl">Add premix</h2>
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">Select active flavours and set the internal recipe percentages. They must total 100%.</p>
+            <label className="mt-5 block text-xs font-bold" htmlFor="premix-name">Premix name<input id="premix-name" className={manageInputClass} value={premixForm.name} onChange={(event) => setPremixForm({ ...premixForm, name: event.target.value })} placeholder="e.g. Peach Breeze" data-testid="input-premix-name" /></label>
+            <label className="mt-4 block text-xs font-bold" htmlFor="premix-profile">Profile tags<input id="premix-profile" className={manageInputClass} value={premixForm.profile} onChange={(event) => setPremixForm({ ...premixForm, profile: event.target.value })} placeholder="Fruity, Cooling" data-testid="input-premix-profile" /></label>
+            <label className="mt-4 block text-xs font-bold" htmlFor="premix-description">Description<textarea id="premix-description" className="mt-2 min-h-20 w-full rounded-xl border border-border bg-background p-3 text-sm outline-none focus:border-secondary" value={premixForm.description} onChange={(event) => setPremixForm({ ...premixForm, description: event.target.value })} placeholder="A balanced fruit blend..." data-testid="input-premix-description" /></label>
+            <label className="mt-4 block text-xs font-bold" htmlFor="premix-best-for">Best for<input id="premix-best-for" className={manageInputClass} value={premixForm.bestFor} onChange={(event) => setPremixForm({ ...premixForm, bestFor: event.target.value })} placeholder="For guests who enjoy..." data-testid="input-premix-best-for" /></label>
+            <div className="mt-5"><div className="flex items-center justify-between"><p className="text-xs font-bold">Recipe ingredients</p><span className="text-[10px] text-muted-foreground">{Object.values(selectedIngredients).reduce((sum, value) => sum + (Number(value) || 0), 0)}% selected</span></div><div className="mt-3 grid gap-2 sm:grid-cols-2">{catalog.flavours.map((flavour) => { const selectedIngredient = selectedIngredients[flavour.id] !== undefined; return <div className={`flex items-center gap-2 rounded-xl border p-2 ${selectedIngredient ? 'border-secondary bg-secondary/10' : 'border-border'}`} key={flavour.id}><label className="flex min-w-0 flex-1 items-center gap-2 text-xs font-semibold"><input type="checkbox" checked={selectedIngredient} onChange={() => toggleIngredient(flavour.id)} data-testid={`checkbox-premix-${flavour.id}`} /><span className="truncate">{flavour.name}</span></label>{selectedIngredient && <div className="flex items-center gap-1"><input type="number" min="0.1" max="100" step="0.1" value={selectedIngredients[flavour.id]} onChange={(event) => setSelectedIngredients({ ...selectedIngredients, [flavour.id]: event.target.value })} className="h-8 w-16 rounded-lg border border-border bg-background px-2 text-right text-xs font-bold outline-none" aria-label={`${flavour.name} percentage`} /><span className="text-[10px] text-muted-foreground">%</span></div>}</div>; })}</div></div>
+            <button className="mt-5 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary px-5 text-sm font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40" type="submit" disabled={!catalog.flavours.length} data-testid="button-add-premix"><Plus size={17} /> Add premix to catalog</button>
+          </form>
+
+          <div className="hv-surface rounded-[2rem] p-5 md:p-7">
+            <div className="flex items-start justify-between gap-4"><div><p className="hv-mono text-[10px] text-accent">ACTIVE RECIPES</p><h2 className="hv-display mt-2 text-3xl">Premix catalog</h2></div><ClipboardList className="text-secondary" size={22} /></div>
+            <div className="mt-6 space-y-3">
+              {catalog.premixes.map((premix) => (
+                <article className="rounded-2xl border border-border bg-background/70 p-4" key={premix.id} data-testid={`card-premix-${premix.id}`}>
+                  <div className="flex items-start gap-3"><div className="min-w-0 flex-1"><h3 className="hv-display text-2xl">{premix.name}</h3><p className="mt-1 text-[10px] text-muted-foreground">{premix.profile.join(' · ')}</p></div><button className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive" onClick={() => removePremix(premix)} aria-label={`Remove ${premix.name}`} data-testid={`button-remove-premix-${premix.id}`}><Trash2 size={15} /></button></div>
+                  <div className="mt-3 flex flex-wrap gap-2">{premix.recipe.map((ingredient) => <span className="rounded-full bg-muted px-2.5 py-1 text-[10px] text-muted-foreground" key={ingredient.flavourId}>{catalog.flavours.find((flavour) => flavour.id === ingredient.flavourId)?.name ?? 'Unavailable flavour'} {ingredient.percentage}%</span>)}</div>
+                </article>
+              ))}
+              {!catalog.premixes.length && <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">No active premixes. Add a recipe to populate recommendations.</p>}
+            </div>
+          </div>
+        </section>
       </div>
     </main>
   );
@@ -545,12 +728,13 @@ function NotFoundPage() {
   return <main className="hv-shell flex min-h-[60vh] flex-col items-center justify-center text-center"><span className="hv-mono text-[10px] text-accent">404 / WRONG TURN</span><h1 className="hv-display mt-4 text-5xl">That cloud drifted away.</h1><Link href="/" className="mt-7 flex min-h-12 items-center gap-2 rounded-2xl bg-primary px-5 text-sm font-bold text-primary-foreground" data-testid="link-not-found-home">Back home <ArrowRight size={16} /></Link></main>;
 }
 
-function RouterView({ choice, onSave, onEdit, onReset, launch, setLaunch }: { choice: Choice | null; onSave: (choice: Choice) => void; onEdit: () => void; onReset: () => void; launch: 'fresh' | 'surprise' | 'edit'; setLaunch: (launch: 'fresh' | 'surprise' | 'edit') => void }) {
+function RouterView({ choice, onSave, onEdit, onReset, launch, setLaunch, catalog, onCatalogChange }: { choice: Choice | null; onSave: (choice: Choice) => void; onEdit: () => void; onReset: () => void; launch: 'fresh' | 'surprise' | 'edit'; setLaunch: (launch: 'fresh' | 'surprise' | 'edit') => void; catalog: Catalog; onCatalogChange: (next: Catalog) => void }) {
   return (
     <Switch>
       <Route path="/"><HomePage onFind={() => { setLaunch('fresh'); }} onSurprise={() => { setLaunch('surprise'); }} /></Route>
-      <Route path="/find"><FinderPage onSave={onSave} editChoice={choice} launch={launch} /></Route>
-      <Route path="/choice"><ChoicePage choice={choice} onEdit={onEdit} onReset={onReset} /></Route>
+      <Route path="/find"><FinderPage onSave={onSave} editChoice={choice} launch={launch} catalog={catalog} /></Route>
+      <Route path="/choice"><ChoicePage choice={choice} onEdit={onEdit} onReset={onReset} catalog={catalog} /></Route>
+      <Route path="/manage"><ManagePage catalog={catalog} onChange={onCatalogChange} /></Route>
       <Route><NotFoundPage /></Route>
     </Switch>
   );
@@ -559,12 +743,17 @@ function RouterView({ choice, onSave, onEdit, onReset, launch, setLaunch }: { ch
 function App() {
   const [, setLocation] = useLocation();
   const [choice, setChoice] = useState<Choice | null>(readChoice);
+  const [catalog, setCatalog] = useState<Catalog>(readCatalog);
   const [launch, setLaunch] = useState<'fresh' | 'surprise' | 'edit'>('fresh');
 
   useEffect(() => {
     if (choice) localStorage.setItem(STORAGE_KEY, JSON.stringify(choice));
     else localStorage.removeItem(STORAGE_KEY);
   }, [choice]);
+
+  useEffect(() => {
+    localStorage.setItem(CATALOG_STORAGE_KEY, JSON.stringify(catalog));
+  }, [catalog]);
 
   const setFinderLaunch = (next: 'fresh' | 'surprise' | 'edit') => {
     setLaunch(next);
@@ -581,6 +770,8 @@ function App() {
           onReset={() => { setChoice(null); setFinderLaunch('fresh'); }}
           launch={launch}
           setLaunch={setFinderLaunch}
+           catalog={catalog}
+           onCatalogChange={setCatalog}
         />
       </AppShell>
     </WouterRouter>

@@ -1,4 +1,4 @@
-import type { Flavour, Strength } from './data/flavours';
+import type { Flavour, Premix, Strength } from './data/flavours';
 
 export type CustomLevel = 'Less' | 'Normal' | 'More';
 
@@ -21,6 +21,11 @@ export type Choice = {
   customizations: Record<string, CustomLevel>;
   remarks: string;
   chosenAt: string;
+};
+
+export type Catalog = {
+  flavours: Flavour[];
+  premixes: Premix[];
 };
 
 export type MixView = {

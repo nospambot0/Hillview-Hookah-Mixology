@@ -1,4 +1,4 @@
-import { getFlavour, getPremix, type Flavour } from '../data/flavours';
+import { flavours as defaultFlavours, premixes as defaultPremixes, type Flavour, type Premix } from '../data/flavours';
 import type { Choice, CustomLevel } from '../types';
 
 export type RecipeLine = {
@@ -23,9 +23,9 @@ function normalizePercentages(lines: Array<Omit<RecipeLine, 'percentage'> & { pe
   return normalized;
 }
 
-export function getRecipeForChoice(choice: Choice): RecipeLine[] {
-  const premix = getPremix(choice.mixId);
-  const selectedFlavours = (choice.flavourIds ?? []).map(getFlavour).filter((flavour): flavour is Flavour => Boolean(flavour));
+export function getRecipeForChoice(choice: Choice, availableFlavours = defaultFlavours, availablePremixes = defaultPremixes): RecipeLine[] {
+  const premix = availablePremixes.find((item) => item.id === choice.mixId) as Premix | undefined;
+  const selectedFlavours = (choice.flavourIds ?? []).map((id) => availableFlavours.find((flavour) => flavour.id === id)).filter((flavour): flavour is Flavour => Boolean(flavour));
   if (!selectedFlavours.length) return [];
 
   const hasPremixRecipe = Boolean(premix && selectedFlavours.length === premix.recipe.length && selectedFlavours.every((flavour) => premix.recipe.some((ingredient) => ingredient.flavourId === flavour.id)));
@@ -42,8 +42,8 @@ export function getRecipeForChoice(choice: Choice): RecipeLine[] {
   return normalizePercentages(baseLines);
 }
 
-export function getBatchRecipe(choice: Choice, batchSize: number) {
-  return getRecipeForChoice(choice).map((line) => ({
+export function getBatchRecipe(choice: Choice, batchSize: number, availableFlavours = defaultFlavours, availablePremixes = defaultPremixes) {
+  return getRecipeForChoice(choice, availableFlavours, availablePremixes).map((line) => ({
     ...line,
     amount: Math.round((batchSize * line.percentage) / 100 * 10) / 10,
   }));

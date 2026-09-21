@@ -1,4 +1,4 @@
-import { flavours, premixes, type Flavour, type Premix, type Strength } from '../data/flavours';
+import { flavours as defaultFlavours, premixes as defaultPremixes, type Flavour, type Premix, type Strength } from '../data/flavours';
 import type { FinderAnswers } from '../types';
 
 export type Recommendation = {
@@ -12,8 +12,8 @@ export type Recommendation = {
 
 const strengthWeight: Record<Strength, number> = { Light: 1, Medium: 2, Strong: 3 };
 
-function getMixFlavours(mix: Premix) {
-  return mix.flavourIds.map((id) => flavours.find((flavour) => flavour.id === id)).filter((flavour): flavour is Flavour => Boolean(flavour));
+function getMixFlavours(mix: Premix, availableFlavours: Flavour[]) {
+  return mix.flavourIds.map((id) => availableFlavours.find((flavour) => flavour.id === id)).filter((flavour): flavour is Flavour => Boolean(flavour));
 }
 
 function getMixStrength(mixFlavours: Flavour[]): Strength {
@@ -23,10 +23,10 @@ function getMixStrength(mixFlavours: Flavour[]): Strength {
   return 'Medium';
 }
 
-export function getRecommendations(answers: FinderAnswers): Recommendation[] {
-  const ranked = premixes
+export function getRecommendations(answers: FinderAnswers, availableFlavours = defaultFlavours, availablePremixes = defaultPremixes): Recommendation[] {
+  const ranked = availablePremixes
     .map((mix) => {
-      const mixFlavours = getMixFlavours(mix);
+      const mixFlavours = getMixFlavours(mix, availableFlavours);
       const matchingTastes = mix.profile.reduce((points, tag) => points + (answers.tastes.includes(tag) ? 7 : 0), 0);
       const favouritePoints = answers.favouriteIds.reduce((points, id) => points + (mix.flavourIds.includes(id) ? 12 : 0), 0);
       const mixStrength = getMixStrength(mixFlavours);

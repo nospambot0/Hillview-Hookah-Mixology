@@ -1,10 +1,11 @@
 import type { Choice } from '../types';
 import { getRecipeForChoice } from './recipe';
+import type { Flavour, Premix } from '../data/flavours';
 
 export const WHATSAPP_DESTINATION = '917978443720';
 
-export function buildWhatsAppMessage(choice: Choice): string {
-  const flavourText = getRecipeForChoice(choice)
+export function buildWhatsAppMessage(choice: Choice, availableFlavours?: Flavour[], availablePremixes?: Premix[]): string {
+  const flavourText = getRecipeForChoice(choice, availableFlavours, availablePremixes)
     .map(({ flavour, percentage, customization }) => `${flavour.name} — ${percentage}% (${customization})`)
     .join('\n');
 
@@ -25,6 +26,6 @@ export function buildWhatsAppMessage(choice: Choice): string {
   ].join('\n');
 }
 
-export function getWhatsAppUrl(choice: Choice): string {
-  return `https://wa.me/${WHATSAPP_DESTINATION}?text=${encodeURIComponent(buildWhatsAppMessage(choice))}`;
+export function getWhatsAppUrl(choice: Choice, availableFlavours?: Flavour[], availablePremixes?: Premix[]): string {
+  return `https://wa.me/${WHATSAPP_DESTINATION}?text=${encodeURIComponent(buildWhatsAppMessage(choice, availableFlavours, availablePremixes))}`;
 }
